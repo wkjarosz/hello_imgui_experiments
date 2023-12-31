@@ -48,7 +48,9 @@ id<MTLFunction> compile_metal_shader(id<MTLDevice> device, const std::string &na
 
     NSArray<NSString *> *function_names = [library functionNames];
     if ([function_names count] != 1)
-        throw std::runtime_error("compile_metal_shader(name=\"" + name + "\"): library must contain exactly 1 shader!");
+        throw std::runtime_error("compile_metal_shader(name=\"" + name + "\", type=\"" + type_str +
+                                 "\"): library must contain exactly 1 shader, but it contains " +
+                                 std::to_string([function_names count]) + "!");
     NSString *function_name = [function_names objectAtIndex:0];
 
     id<MTLFunction> function = [library newFunctionWithName:function_name];
@@ -86,28 +88,27 @@ Shader::Shader(RenderPass *render_pass, const std::string &name, const std::stri
         HelloImGui::FreeAssetFileData(&fs);
     }
 
-    id<MTLFunction> vertex_func   = compile_metal_shader(device, name, "vertex", vertex_shader),
-                    fragment_func = compile_metal_shader(device, name, "fragment", fragment_shader);
+    id<MTLFunction> fragment_func = compile_metal_shader(device, name, "fragment", fragment_shader),
+                    vertex_func   = compile_metal_shader(device, name, "vertex", vertex_shader);
 
     MTLRenderPipelineDescriptor *pipeline_desc = [MTLRenderPipelineDescriptor new];
     pipeline_desc.vertexFunction               = vertex_func;
     pipeline_desc.fragmentFunction             = fragment_func;
 
-    MTLRenderPipelineColorAttachmentDescriptor *att = pipeline_desc.colorAttachments[0];
-    att.pixelFormat                                 = gMetalGlobals.caMetalLayer.pixelFormat;
+    pipeline_desc.colorAttachments[0].pixelFormat = gMetalGlobals.caMetalLayer.pixelFormat;
 
     if (blend_mode == BlendMode::AlphaBlend)
     {
-        att.blendingEnabled             = YES;
-        att.rgbBlendOperation           = MTLBlendOperationAdd;
-        att.alphaBlendOperation         = MTLBlendOperationAdd;
-        att.sourceRGBBlendFactor        = MTLBlendFactorSourceAlpha;
-        att.sourceAlphaBlendFactor      = MTLBlendFactorSourceAlpha;
-        att.destinationRGBBlendFactor   = MTLBlendFactorOneMinusSourceAlpha;
-        att.destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+        pipeline_desc.colorAttachments[0].blendingEnabled             = YES;
+        pipeline_desc.colorAttachments[0].rgbBlendOperation           = MTLBlendOperationAdd;
+        pipeline_desc.colorAttachments[0].alphaBlendOperation         = MTLBlendOperationAdd;
+        pipeline_desc.colorAttachments[0].sourceRGBBlendFactor        = MTLBlendFactorSourceAlpha;
+        pipeline_desc.colorAttachments[0].sourceAlphaBlendFactor      = MTLBlendFactorSourceAlpha;
+        pipeline_desc.colorAttachments[0].destinationRGBBlendFactor   = MTLBlendFactorOneMinusSourceAlpha;
+        pipeline_desc.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
     }
 
-    // pipeline_desc.sampleCount = 1;
+    pipeline_desc.sampleCount = 1;
 
     NSError                     *error      = nil;
     MTLRenderPipelineReflection *reflection = nil;
@@ -123,7 +124,7 @@ Shader::Shader(RenderPass *render_pass, const std::string &name, const std::stri
                                  std::string(error_pipeline));
     }
 
-    m_pipeline_state = (__bridge_retained void *)pipeline_state;
+    m_pipeline_state = (void *)pipeline_state;
 
     for (MTLArgument *arg in [reflection vertexArguments])
     {
@@ -143,6 +144,8 @@ Shader::Shader(RenderPass *render_pass, const std::string &name, const std::stri
             buf.type = VertexSampler;
         else
             throw std::runtime_error("Shader::Shader(): \"" + name + "\": unsupported argument type!");
+
+        fmt::print("vertex argument: {} of type {}\n", name, (int)buf.type);
     }
 
     for (MTLArgument *arg in [reflection fragmentArguments])
@@ -163,6 +166,8 @@ Shader::Shader(RenderPass *render_pass, const std::string &name, const std::stri
             buf.type = FragmentSampler;
         else
             throw std::runtime_error("Shader::Shader(): \"" + name + "\": unsupported argument type!");
+
+        fmt::print("vertex argument: {} of type {}\n", name, (int)buf.type);
     }
 
     Buffer &buf = m_buffers["indices"];
@@ -181,22 +186,20 @@ Shader::~Shader()
             if (buf.size <= METAL_BUFFER_THRESHOLD)
                 delete[] (uint8_t *)buf.buffer;
             else
-                (void)(__bridge_transfer id<MTLBuffer>)buf.buffer;
+                // (void)(__bridge_transfer id<MTLBuffer>)buf.buffer;
+                [(id<MTLBuffer>)buf.buffer release];
         }
         else if (buf.type == VertexTexture || buf.type == FragmentTexture)
-        {
-            (void)(__bridge_transfer id<MTLTexture>)buf.buffer;
-        }
+            // (void)(__bridge_transfer id<MTLTexture>)buf.buffer;
+            [(id<MTLTexture>)buf.buffer release];
         else if (buf.type == VertexSampler || buf.type == FragmentSampler)
-        {
-            (void)(__bridge_transfer id<MTLSamplerState>)buf.buffer;
-        }
+            // (void)(__bridge_transfer id<MTLSamplerState>)buf.buffer;
+            [(id<MTLSamplerState>)buf.buffer release];
         else
-        {
-            std::cerr << "Shader::~Shader(): unknown buffer type!" << std::endl;
-        }
+            fmt::print(stderr, "Shader::~Shader(): unknown buffer type!\n");
     }
-    (void)(__bridge_transfer id<MTLRenderPipelineState>)m_pipeline_state;
+
+    [(id<MTLRenderPipelineState>)m_pipeline_state release];
 }
 
 void Shader::set_buffer(const std::string &name, VariableType dtype, size_t ndim, const size_t *shape, const void *data)
@@ -219,25 +222,28 @@ void Shader::set_buffer(const std::string &name, VariableType dtype, size_t ndim
         if (buf.size <= METAL_BUFFER_THRESHOLD)
             delete[] (uint8_t *)buf.buffer;
         else
-            (void)(__bridge_transfer id<MTLBuffer>)buf.buffer;
+            // (void)(__bridge_transfer id<MTLBuffer>)buf.buffer;
+            [(id<MTLBuffer>)buf.buffer release];
         buf.buffer = nullptr;
     }
 
     if (size <= METAL_BUFFER_THRESHOLD && name != "indices")
     {
+        fmt::print("Using the small version!\n");
         if (!buf.buffer)
             buf.buffer = new uint8_t[size];
         memcpy(buf.buffer, data, size);
     }
     else
     {
+        fmt::print("Using the custom version!\n");
         /* Procedure recommended by Apple: create a temporary shared buffer and
            blit into a private GPU-only buffer */
         id<MTLDevice> device = gMetalGlobals.caMetalLayer.device;
         id<MTLBuffer> mtl_buffer;
 
         if (buf.buffer)
-            mtl_buffer = (__bridge_transfer id<MTLBuffer>)buf.buffer;
+            mtl_buffer = (id<MTLBuffer>)buf.buffer;
         else
             mtl_buffer = [device newBufferWithLength:size options:MTLResourceStorageModePrivate];
 
@@ -252,7 +258,7 @@ void Shader::set_buffer(const std::string &name, VariableType dtype, size_t ndim
         [command_buffer commit];
         [command_buffer waitUntilCompleted];
 
-        buf.buffer = (__bridge_retained void *)mtl_buffer;
+        buf.buffer = (void *)mtl_buffer;
     }
 
     buf.dtype = dtype;
@@ -300,8 +306,8 @@ void Shader::set_buffer(const std::string &name, VariableType dtype, size_t ndim
 
 void Shader::begin()
 {
-    id<MTLRenderPipelineState>  pipeline_state = (__bridge id<MTLRenderPipelineState>)m_pipeline_state;
-    id<MTLRenderCommandEncoder> command_enc    = (__bridge id<MTLRenderCommandEncoder>)m_render_pass->command_encoder();
+    auto pipeline_state = (id<MTLRenderPipelineState>)m_pipeline_state;
+    auto command_enc    = (id<MTLRenderCommandEncoder>)m_render_pass->command_encoder();
 
     [command_enc setRenderPipelineState:pipeline_state];
 
@@ -311,10 +317,7 @@ void Shader::begin()
         if (!buf.buffer)
         {
             if (!indices)
-                fprintf(stderr,
-                        "Shader::begin(): shader \"%s\" has an unbound "
-                        "argument \"%s\"!\n",
-                        m_name.c_str(), key.c_str());
+                fmt::print(stderr, "Shader::begin(): shader \"{}\" has an unbound argument \"{}\"!\n", m_name, key);
             continue;
         }
 
@@ -322,28 +325,28 @@ void Shader::begin()
         {
         case VertexTexture:
         {
-            id<MTLTexture> texture = (__bridge id<MTLTexture>)buf.buffer;
+            auto texture = (id<MTLTexture>)buf.buffer;
             [command_enc setVertexTexture:texture atIndex:buf.index];
         }
         break;
 
         case FragmentTexture:
         {
-            id<MTLTexture> texture = (__bridge id<MTLTexture>)buf.buffer;
+            auto texture = (id<MTLTexture>)buf.buffer;
             [command_enc setFragmentTexture:texture atIndex:buf.index];
         }
         break;
 
         case VertexSampler:
         {
-            id<MTLSamplerState> state = (__bridge id<MTLSamplerState>)buf.buffer;
+            auto state = (id<MTLSamplerState>)buf.buffer;
             [command_enc setVertexSamplerState:state atIndex:buf.index];
         }
         break;
 
         case FragmentSampler:
         {
-            id<MTLSamplerState> state = (__bridge id<MTLSamplerState>)buf.buffer;
+            auto state = (id<MTLSamplerState>)buf.buffer;
             [command_enc setFragmentSamplerState:state atIndex:buf.index];
         }
         break;
@@ -360,7 +363,7 @@ void Shader::begin()
             }
             else
             {
-                id<MTLBuffer> buffer = (__bridge id<MTLBuffer>)buf.buffer;
+                auto buffer = (id<MTLBuffer>)buf.buffer;
                 if (buf.type == VertexBuffer)
                     [command_enc setVertexBuffer:buffer offset:0 atIndex:buf.index];
                 else if (buf.type == FragmentBuffer)
@@ -389,7 +392,7 @@ void Shader::draw_array(PrimitiveType primitive_type, size_t offset, size_t coun
     default: throw std::runtime_error("Shader::draw_array(): invalid primitive type!");
     }
 
-    id<MTLRenderCommandEncoder> command_enc = (__bridge id<MTLRenderCommandEncoder>)m_render_pass->command_encoder();
+    auto command_enc = (id<MTLRenderCommandEncoder>)m_render_pass->command_encoder();
 
     if (!indexed)
     {
@@ -397,7 +400,7 @@ void Shader::draw_array(PrimitiveType primitive_type, size_t offset, size_t coun
     }
     else
     {
-        id<MTLBuffer> index_buffer = (__bridge id<MTLBuffer>)m_buffers["indices"].buffer;
+        auto index_buffer = (id<MTLBuffer>)m_buffers["indices"].buffer;
         [command_enc drawIndexedPrimitives:primitive_type_mtl
                                 indexCount:count
                                  indexType:MTLIndexTypeUInt32

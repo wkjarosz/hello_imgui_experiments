@@ -60,9 +60,9 @@ jobs:
       - name: Build
         run: cmake --build ${{github.workspace}}/build/${{ matrix.buildtype }} --parallel 4 --config ${{ matrix.buildtype }}
 
-      - name: Checking that Samplin Safari runs
+      - name: Checking that HelloGuiExperiments runs
         run: |
-          ${{github.workspace}}/build/${{ matrix.buildtype }}/Samplin\ Safari --help
+          ${{github.workspace}}/build/${{ matrix.buildtype }}/HelloGuiExperiments --help
 
       - name: Archive build artifacts
         uses: actions/upload-artifact@v3

@@ -40,7 +40,7 @@ void RenderPass::begin()
 
     set_viewport(m_viewport_offset, m_viewport_size);
 
-    // if (m_clear)
+    if (m_clear)
     {
         GLenum what = 0;
         if (m_depth_write)

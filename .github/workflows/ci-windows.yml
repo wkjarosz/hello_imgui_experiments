@@ -39,13 +39,13 @@ jobs:
       - name: Build
         run: cmake --build ${{github.workspace}}/build --parallel --config ${{ matrix.buildtype }} --verbose
 
-      - name: Checking that Samplin Safari runs
+      - name: Checking that HelloGuiExperiments runs
         run: |
-          "${{github.workspace}}/build/${{ matrix.buildtype }}/Samplin Safari.exe --help"
+          "${{github.workspace}}/build/${{ matrix.buildtype }}/HelloGuiExperiments.exe --help"
 
       - name: Archive build artifacts
         uses: actions/upload-artifact@v3
         with:
           name: build-artifacts-${{ matrix.config.os }}-${{ matrix.buildtype }}
           path: |
-            "${{github.workspace}}/build/${{ matrix.buildtype }}/Samplin Safari.exe"
+            "${{github.workspace}}/build/${{ matrix.buildtype }}/HelloGuiExperiments.exe"

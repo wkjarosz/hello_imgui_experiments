@@ -4,9 +4,12 @@
 #pragma once
 
 #include "linalg.h"
+#include <memory>
 #include <unordered_map>
 
 using namespace linalg::aliases;
+
+class Shader;
 
 /// An abstraction for rendering passes that work with OpenGL, OpenGL ES, and Metal.
 /*
@@ -146,9 +149,9 @@ protected:
     bool m_cull_face_backup;
     bool m_blend_backup;
 #elif defined(HELLOIMGUI_HAS_METAL)
-    void *m_command_buffer;
-    void *m_command_encoder;
-    void *m_pass_descriptor;
-// ref<Shader> m_clear_shader;
+    void                   *m_command_buffer;
+    void                   *m_command_encoder;
+    void                   *m_pass_descriptor;
+    std::unique_ptr<Shader> m_clear_shader;
 #endif
 };
