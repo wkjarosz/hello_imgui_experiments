@@ -43,7 +43,9 @@ void RenderPass::begin()
     pass_descriptor.colorAttachments[0].loadAction  = m_clear && !clear_manual ? MTLLoadActionClear : MTLLoadActionLoad;
     pass_descriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
 
-    id<MTLRenderCommandEncoder> command_encoder = [command_buffer renderCommandEncoderWithDescriptor:pass_descriptor];
+    // id<MTLRenderCommandEncoder> command_encoder = [command_buffer
+    // renderCommandEncoderWithDescriptor:pass_descriptor];
+    auto command_enc = gMetalGlobals.mtlRenderCommandEncoder;
 
     // [command_encoder setFrontFacingWinding:MTLWindingCounterClockwise];
 
