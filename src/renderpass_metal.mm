@@ -8,6 +8,8 @@
 #include "renderpass.h"
 #include "shader.h"
 
+#include <fmt/core.h>
+
 RenderPass::RenderPass(bool write_depth, bool clear) :
     m_clear(clear), m_clear_color(0, 0, 0, 0), m_clear_depth(1.f), m_viewport_offset(0), m_viewport_size(0),
     m_framebuffer_size(0), m_depth_test(write_depth ? DepthTest::Less : DepthTest::Always), m_depth_write(write_depth),
@@ -34,8 +36,12 @@ void RenderPass::begin()
     auto &gMetalGlobals = HelloImGui::GetMetalGlobals();
 
     id<MTLCommandBuffer> command_buffer = [gMetalGlobals.mtlCommandQueue commandBuffer];
+    // id<MTLCommandBuffer> command_buffer = gMetalGlobals.mtlCommandBuffer;
+    if (command_buffer == nullptr)
+        throw std::runtime_error("NULL");
 
     auto pass_descriptor = (MTLRenderPassDescriptor *)m_pass_descriptor;
+    // auto pass_descriptor = gMetalGlobals.mtlRenderPassDescriptor;
 
     bool clear_manual = false; // m_clear && (m_viewport_offset != int2(0, 0) || m_viewport_size != m_framebuffer_size);
 
@@ -44,9 +50,9 @@ void RenderPass::begin()
     pass_descriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
 
     id<MTLRenderCommandEncoder> command_encoder = [command_buffer renderCommandEncoderWithDescriptor:pass_descriptor];
-    auto                        command_enc     = gMetalGlobals.mtlRenderCommandEncoder;
+    fmt::print("created RenderPass command encoder, and starting encoding\n");
 
-    // [command_encoder setFrontFacingWinding:MTLWindingCounterClockwise];
+    [command_encoder setFrontFacingWinding:MTLWindingCounterClockwise];
 
     m_command_buffer  = (void *)command_buffer;
     m_command_encoder = (void *)command_encoder;
@@ -54,31 +60,31 @@ void RenderPass::begin()
 
     set_viewport(m_viewport_offset, m_viewport_size);
 
-    // if (clear_manual)
-    // {
-    //     MTLDepthStencilDescriptor *depth_desc = [MTLDepthStencilDescriptor new];
-    //     depth_desc.depthCompareFunction       = MTLCompareFunctionAlways;
-    //     depth_desc.depthWriteEnabled          = true;
-    //     id<MTLDepthStencilState> depth_state =
-    //         [gMetalGlobals.caMetalLayer.device newDepthStencilStateWithDescriptor:depth_desc];
-    //     [command_encoder setDepthStencilState:depth_state];
+    if (clear_manual)
+    {
+        MTLDepthStencilDescriptor *depth_desc = [MTLDepthStencilDescriptor new];
+        depth_desc.depthCompareFunction       = MTLCompareFunctionAlways;
+        depth_desc.depthWriteEnabled          = true;
+        id<MTLDepthStencilState> depth_state =
+            [gMetalGlobals.caMetalLayer.device newDepthStencilStateWithDescriptor:depth_desc];
+        [command_encoder setDepthStencilState:depth_state];
 
-    //     if (!m_clear_shader)
-    //     {
-    //         m_clear_shader = std::unique_ptr<Shader>(
-    //             new Shader(this, "clear shader", "shaders/clear.vertex", "shaders/clear.fragment"));
+        if (!m_clear_shader)
+        {
+            m_clear_shader =
+                std::make_unique<Shader>(this, "clear shader", "shaders/clear.vertex", "shaders/clear.fragment");
 
-    //         const float positions[] = {-1.f, -1.f, 1.f, -1.f, -1.f, 1.f, 1.f, -1.f, 1.f, 1.f, -1.f, 1.f};
+            const float positions[] = {-1.f, -1.f, 1.f, -1.f, -1.f, 1.f, 1.f, -1.f, 1.f, 1.f, -1.f, 1.f};
 
-    //         m_clear_shader->set_buffer("position", VariableType::Float32, {6, 2}, positions);
-    //     }
+            m_clear_shader->set_buffer("position", VariableType::Float32, {6, 2}, positions);
+        }
 
-    //     m_clear_shader->set_uniform("clear_color", m_clear_color);
-    //     m_clear_shader->set_uniform("clear_depth", m_clear_depth);
-    //     m_clear_shader->begin();
-    //     m_clear_shader->draw_array(Shader::PrimitiveType::Triangle, 0, 6, false);
-    //     m_clear_shader->end();
-    // }
+        m_clear_shader->set_uniform("clear_color", m_clear_color);
+        m_clear_shader->set_uniform("clear_depth", m_clear_depth);
+        m_clear_shader->begin();
+        m_clear_shader->draw_array(Shader::PrimitiveType::Triangle, 0, 6, false);
+        m_clear_shader->end();
+    }
 
     set_depth_test(m_depth_test, m_depth_write);
     set_cull_mode(m_cull_mode);
@@ -90,13 +96,21 @@ void RenderPass::end()
     if (!m_active)
         throw std::runtime_error("RenderPass::end(): render pass is not active!");
 #endif
+    auto &gMetalGlobals = HelloImGui::GetMetalGlobals();
 
     // cast our void*s to their appropriate ObjC types
-    auto command_buffer  = (id<MTLCommandBuffer>)m_command_buffer;
-    auto command_encoder = (id<MTLRenderCommandEncoder>)m_command_encoder;
+    id<MTLCommandBuffer> command_buffer = (id<MTLCommandBuffer>)m_command_buffer;
+    // id<MTLCommandBuffer> command_buffer = gMetalGlobals.mtlCommandBuffer;
+    if (command_buffer == nullptr)
+        throw std::runtime_error("NULL");
+    id<MTLRenderCommandEncoder> command_encoder = (id<MTLRenderCommandEncoder>)m_command_encoder;
 
     [command_encoder endEncoding];
+    // fmt::print("endEncoding on RenderPass\n");
+    // throw std::runtime_error("WOW");
     [command_buffer commit];
+    // fmt::print("committing in RenderPass\n");
+    // [command_buffer waitUntilCompleted];
 
     // Release may be needed
     [command_buffer release];
@@ -119,6 +133,8 @@ void RenderPass::set_clear_color(const float4 &color)
 {
     m_clear_color = color;
 
+    auto &gMetalGlobals = HelloImGui::GetMetalGlobals();
+
     MTLRenderPassDescriptor *pass_descriptor = (MTLRenderPassDescriptor *)m_pass_descriptor;
 
     pass_descriptor.colorAttachments[0].clearColor = MTLClearColorMake(color.x, color.y, color.z, color.w);
@@ -127,6 +143,8 @@ void RenderPass::set_clear_color(const float4 &color)
 void RenderPass::set_clear_depth(float depth)
 {
     m_clear_depth = depth;
+
+    auto &gMetalGlobals = HelloImGui::GetMetalGlobals();
 
     MTLRenderPassDescriptor *pass_descriptor   = (MTLRenderPassDescriptor *)m_pass_descriptor;
     pass_descriptor.depthAttachment.clearDepth = depth;
@@ -139,7 +157,7 @@ void RenderPass::set_viewport(const int2 &offset, const int2 &size)
     if (m_active)
     {
         // cast our void*s to their appropriate ObjC types
-        auto command_encoder = (id<MTLRenderCommandEncoder>)m_command_encoder;
+        id<MTLRenderCommandEncoder> command_encoder = (id<MTLRenderCommandEncoder>)m_command_encoder;
 
         [command_encoder
             setViewport:(MTLViewport){(double)offset.x, (double)offset.y, (double)size.x, (double)size.y, 0.0, 1.0}];
@@ -178,7 +196,7 @@ void RenderPass::set_depth_test(DepthTest depth_test, bool depth_write)
 
         id<MTLDepthStencilState> depth_state =
             [gMetalGlobals.caMetalLayer.device newDepthStencilStateWithDescriptor:depth_desc];
-        auto command_encoder = (id<MTLRenderCommandEncoder>)m_command_encoder;
+        id<MTLRenderCommandEncoder> command_encoder = (id<MTLRenderCommandEncoder>)m_command_encoder;
         [command_encoder setDepthStencilState:depth_state];
     }
 }
@@ -196,7 +214,7 @@ void RenderPass::set_cull_mode(CullMode cull_mode)
         case CullMode::Disabled: cull_mode_mtl = MTLCullModeNone; break;
         default: throw std::runtime_error("Shader::set_cull_mode(): invalid cull mode!");
         }
-        auto command_encoder = (id<MTLRenderCommandEncoder>)m_command_encoder;
+        id<MTLRenderCommandEncoder> command_encoder = (id<MTLRenderCommandEncoder>)m_command_encoder;
         [command_encoder setCullMode:cull_mode_mtl];
     }
 }

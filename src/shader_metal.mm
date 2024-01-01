@@ -229,16 +229,13 @@ void Shader::set_buffer(const std::string &name, VariableType dtype, size_t ndim
 
     if (size <= METAL_BUFFER_THRESHOLD && name != "indices")
     {
-        fmt::print("Using the small version!\n");
         if (!buf.buffer)
             buf.buffer = new uint8_t[size];
         memcpy(buf.buffer, data, size);
     }
     else
     {
-        fmt::print("Using the custom version!\n");
-        /* Procedure recommended by Apple: create a temporary shared buffer and
-           blit into a private GPU-only buffer */
+        /* Procedure recommended by Apple: create a temporary shared buffer and blit into a private GPU-only buffer */
         id<MTLDevice> device = gMetalGlobals.caMetalLayer.device;
         id<MTLBuffer> mtl_buffer;
 
@@ -306,11 +303,8 @@ void Shader::set_buffer(const std::string &name, VariableType dtype, size_t ndim
 
 void Shader::begin()
 {
-    auto &gMetalGlobals = HelloImGui::GetMetalGlobals();
-
     auto pipeline_state = (id<MTLRenderPipelineState>)m_pipeline_state;
-    // auto command_enc    = (id<MTLRenderCommandEncoder>)m_render_pass->command_encoder();
-    auto command_enc = gMetalGlobals.mtlRenderCommandEncoder;
+    auto command_enc    = (id<MTLRenderCommandEncoder>)m_render_pass->command_encoder();
 
     [command_enc setRenderPipelineState:pipeline_state];
 
@@ -384,8 +378,6 @@ void Shader::end()
 
 void Shader::draw_array(PrimitiveType primitive_type, size_t offset, size_t count, bool indexed, size_t instances)
 {
-    auto &gMetalGlobals = HelloImGui::GetMetalGlobals();
-
     MTLPrimitiveType primitive_type_mtl;
     switch (primitive_type)
     {
@@ -397,8 +389,7 @@ void Shader::draw_array(PrimitiveType primitive_type, size_t offset, size_t coun
     default: throw std::runtime_error("Shader::draw_array(): invalid primitive type!");
     }
 
-    // auto command_enc = (id<MTLRenderCommandEncoder>)m_render_pass->command_encoder();
-    auto command_enc = gMetalGlobals.mtlRenderCommandEncoder;
+    auto command_enc = (id<MTLRenderCommandEncoder>)m_render_pass->command_encoder();
 
     if (!indexed)
     {
