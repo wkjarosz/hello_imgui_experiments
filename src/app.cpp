@@ -196,8 +196,6 @@ void SampleViewer::draw_background()
         // clear the framebuffer and set up the viewport
         //
 
-        static int frame = 0;
-
         m_bg_color = float4{1.0, 1.5, 1.5, 1.0};
         // m_params.imGuiWindowParams.backgroundColor = m_bg_color;
 

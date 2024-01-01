@@ -16,8 +16,6 @@ project(
   LANGUAGES C CXX
 )
 
-message(STATUS "C++ compiler is: ${CMAKE_CXX_COMPILER_ID}")
-
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
   set(VERSION_LONG "${GIT_DESCRIBE} (64 bit)")
 elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)

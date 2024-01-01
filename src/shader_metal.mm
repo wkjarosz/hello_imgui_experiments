@@ -63,7 +63,7 @@ id<MTLFunction> compile_metal_shader(id<MTLDevice> device, const std::string &na
 Shader::Shader(RenderPass *render_pass, const std::string &name, const std::string &vs_filename,
                const std::string &fs_filename, BlendMode blend_mode) :
     m_render_pass(render_pass),
-    m_name(name), m_blend_mode(blend_mode), m_pipeline_state(nullptr)
+    m_name(name), m_blend_mode(blend_mode)
 {
     auto         &gMetalGlobals = HelloImGui::GetMetalGlobals();
     id<MTLDevice> device        = gMetalGlobals.caMetalLayer.device;
@@ -186,14 +186,11 @@ Shader::~Shader()
             if (buf.size <= METAL_BUFFER_THRESHOLD)
                 delete[] (uint8_t *)buf.buffer;
             else
-                // (void)(__bridge_transfer id<MTLBuffer>)buf.buffer;
                 [(id<MTLBuffer>)buf.buffer release];
         }
         else if (buf.type == VertexTexture || buf.type == FragmentTexture)
-            // (void)(__bridge_transfer id<MTLTexture>)buf.buffer;
             [(id<MTLTexture>)buf.buffer release];
         else if (buf.type == VertexSampler || buf.type == FragmentSampler)
-            // (void)(__bridge_transfer id<MTLSamplerState>)buf.buffer;
             [(id<MTLSamplerState>)buf.buffer release];
         else
             fmt::print(stderr, "Shader::~Shader(): unknown buffer type!\n");
@@ -222,7 +219,6 @@ void Shader::set_buffer(const std::string &name, VariableType dtype, size_t ndim
         if (buf.size <= METAL_BUFFER_THRESHOLD)
             delete[] (uint8_t *)buf.buffer;
         else
-            // (void)(__bridge_transfer id<MTLBuffer>)buf.buffer;
             [(id<MTLBuffer>)buf.buffer release];
         buf.buffer = nullptr;
     }

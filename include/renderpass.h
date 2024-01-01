@@ -120,38 +120,23 @@ public:
     void resize(const int2 &size);
 
 #if defined(HELLOIMGUI_HAS_METAL)
-    void *command_encoder() const
-    {
-        return m_command_encoder;
-    }
-    void *command_buffer() const
-    {
-        return m_command_buffer;
-    }
+    void *command_encoder() const;
+    void *command_buffer() const;
 #endif
 
 protected:
     bool      m_clear;
-    float4    m_clear_color;
-    float     m_clear_depth;
-    int2      m_viewport_offset;
-    int2      m_viewport_size;
-    int2      m_framebuffer_size;
+    float4    m_clear_color      = float4{0, 0, 0, 0};
+    float     m_clear_depth      = 1.f;
+    int2      m_viewport_offset  = int2{0};
+    int2      m_viewport_size    = int2{0};
+    int2      m_framebuffer_size = int2{0};
     DepthTest m_depth_test;
     bool      m_depth_write;
     CullMode  m_cull_mode;
-    bool      m_active;
-#if defined(HELLOIMGUI_HAS_OPENGL)
-    int4 m_viewport_backup, m_scissor_backup;
-    bool m_depth_test_backup;
-    bool m_depth_write_backup;
-    bool m_scissor_test_backup;
-    bool m_cull_face_backup;
-    bool m_blend_backup;
-#elif defined(HELLOIMGUI_HAS_METAL)
-    void                   *m_command_buffer;
-    void                   *m_command_encoder;
-    void                   *m_pass_descriptor;
-    std::unique_ptr<Shader> m_clear_shader;
-#endif
+    bool      m_active = false;
+
+    // hide the platform-specific details via PIMPL
+    struct Data;
+    std::unique_ptr<Data> m_data;
 };
