@@ -201,15 +201,15 @@ void SampleViewer::draw_background()
         m_bg_color                                 = float4{1.0, 1.5, 1.5, 1.0};
         m_params.imGuiWindowParams.backgroundColor = m_bg_color;
 
-        m_render_pass->resize(fbsize);
+        // m_render_pass->resize(fbsize);
 
-        m_render_pass->set_viewport((viewport_offset + 10) * fbscale, (viewport_size - 20) * fbscale);
+        // m_render_pass->set_viewport((viewport_offset + 10) * fbscale, (viewport_size - 20) * fbscale);
         // m_render_pass->set_clear_color(float4{fmod(frame++ / 100.f, 1.f), 0.2, 0.1, 1.0});
-        m_render_pass->set_clear_color(m_bg_color);
-        m_render_pass->set_cull_mode(RenderPass::CullMode::Disabled);
-        m_render_pass->set_depth_test(RenderPass::DepthTest::Always, false);
+        // m_render_pass->set_clear_color(m_bg_color);
+        // m_render_pass->set_cull_mode(RenderPass::CullMode::Disabled);
+        // m_render_pass->set_depth_test(RenderPass::DepthTest::Always, false);
 
-        m_render_pass->begin();
+        // m_render_pass->begin();
 
         // m_shader->begin();
         // m_shader->draw_array(Shader::PrimitiveType::TriangleStrip, 0, 4, false);
@@ -219,7 +219,7 @@ void SampleViewer::draw_background()
         m_shader->draw_array(Shader::PrimitiveType::Triangle, 0, 6, false);
         m_shader->end();
 
-        m_render_pass->end();
+        // m_render_pass->end();
     }
     catch (const std::exception &e)
     {
