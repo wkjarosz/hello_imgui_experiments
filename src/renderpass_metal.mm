@@ -10,19 +10,19 @@
 
 #include <fmt/core.h>
 
-struct RenderPass::Data
+struct RenderPass::Pimpl
 {
     id<MTLCommandBuffer>        command_buffer  = nullptr;
     id<MTLRenderCommandEncoder> command_encoder = nullptr;
     MTLRenderPassDescriptor    *pass_descriptor = nullptr;
     std::unique_ptr<Shader>     clear_shader;
 
-    Data()
+    Pimpl()
     {
         pass_descriptor = [MTLRenderPassDescriptor new];
     }
 
-    ~Data()
+    ~Pimpl()
     {
         [pass_descriptor release];
     }
@@ -30,7 +30,7 @@ struct RenderPass::Data
 
 RenderPass::RenderPass(bool write_depth, bool clear) :
     m_clear(clear), m_depth_test(write_depth ? DepthTest::Less : DepthTest::Always), m_depth_write(write_depth),
-    m_cull_mode(CullMode::Back), m_data(new RenderPass::Data)
+    m_cull_mode(CullMode::Back), m_data(new RenderPass::Pimpl)
 {
     set_clear_color(m_clear_color);
     set_clear_depth(m_clear_depth);
@@ -38,6 +38,7 @@ RenderPass::RenderPass(bool write_depth, bool clear) :
 
 RenderPass::~RenderPass()
 {
+    delete m_data;
 }
 
 void *RenderPass::command_encoder() const

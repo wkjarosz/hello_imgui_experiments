@@ -7,7 +7,7 @@
 #include <fmt/core.h>
 #include <stdexcept>
 
-struct RenderPass::Data
+struct RenderPass::Pimpl
 {
     int4 viewport_backup, scissor_backup;
     bool depth_test_backup;
@@ -19,12 +19,13 @@ struct RenderPass::Data
 
 RenderPass::RenderPass(bool write_depth, bool clear) :
     m_clear(clear), m_depth_test(write_depth ? DepthTest::Less : DepthTest::Always), m_depth_write(write_depth),
-    m_cull_mode(CullMode::Back), m_data(new RenderPass::Data)
+    m_cull_mode(CullMode::Back), m_data(new RenderPass::Pimpl)
 {
 }
 
 RenderPass::~RenderPass()
 {
+    delete m_data;
 }
 
 void RenderPass::begin()

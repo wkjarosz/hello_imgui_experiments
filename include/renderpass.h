@@ -137,6 +137,6 @@ protected:
     bool      m_active = false;
 
     // hide the platform-specific details via PIMPL
-    struct Data;
-    std::unique_ptr<Data> m_data;
+    struct Pimpl;
+    Pimpl *m_data;
 };

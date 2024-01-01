@@ -124,6 +124,8 @@ Shader::Shader(RenderPass *render_pass, const std::string &name, const std::stri
                                  std::string(error_pipeline));
     }
 
+    [error release];
+
     m_pipeline_state = (void *)pipeline_state;
 
     for (MTLArgument *arg in [reflection vertexArguments])
@@ -169,6 +171,8 @@ Shader::Shader(RenderPass *render_pass, const std::string &name, const std::stri
 
         fmt::print("vertex argument: {} of type {}\n", name, (int)buf.type);
     }
+
+    [reflection release];
 
     Buffer &buf = m_buffers["indices"];
     buf.index   = -1;
