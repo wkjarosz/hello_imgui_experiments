@@ -4,6 +4,7 @@
 #include "hello_imgui/hello_imgui_include_opengl.h" // cross-platform way to include OpenGL headers
 #include "opengl_check.h"
 #include "shader.h"
+#include "texture.h"
 
 #if !defined(GL_HALF_FLOAT)
 #define GL_HALF_FLOAT 0x140B
@@ -356,18 +357,18 @@ void Shader::set_buffer(const std::string &name, VariableType dtype, size_t ndim
     buf.dirty = true;
 }
 
-// void Shader::set_texture(const std::string &name, Texture *texture)
-// {
-//     auto it = m_buffers.find(name);
-//     if (it == m_buffers.end())
-//         throw std::runtime_error("Shader::set_texture(): could not find argument named \"" + name + "\"");
-//     Buffer &buf = m_buffers[name];
-//     if (!(buf.type == VertexTexture || buf.type == FragmentTexture))
-//         throw std::runtime_error("Shader::set_texture(): argument named \"" + name + "\" is not a texture!");
+void Shader::set_texture(const std::string &name, Texture *texture)
+{
+    auto it = m_buffers.find(name);
+    if (it == m_buffers.end())
+        throw std::runtime_error("Shader::set_texture(): could not find argument named \"" + name + "\"");
+    Buffer &buf = m_buffers[name];
+    if (!(buf.type == VertexTexture || buf.type == FragmentTexture))
+        throw std::runtime_error("Shader::set_texture(): argument named \"" + name + "\" is not a texture!");
 
-//     buf.buffer = (void *)((uintptr_t)texture->texture_handle());
-//     buf.dirty  = true;
-// }
+    buf.buffer = (void *)((uintptr_t)texture->texture_handle());
+    buf.dirty  = true;
+}
 
 void Shader::begin()
 {

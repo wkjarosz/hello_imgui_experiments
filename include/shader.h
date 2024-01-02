@@ -9,6 +9,7 @@
 #include <unordered_map>
 
 class RenderPass;
+class Texture;
 
 /**
     An abstraction for shaders that work with OpenGL, OpenGL ES, and Metal.
@@ -168,12 +169,12 @@ public:
     */
     void set_buffer_pointer_offset(const std::string &name, size_t offset);
 
-    // /**
-    //  * \brief Associate a texture with a named shader parameter
-    //  *
-    //  * The association will be replaced if it is already present.
-    //  */
-    // void set_texture(const std::string &name, Texture *texture);
+    /**
+        Associate a texture with a named shader parameter
+
+        The association will be replaced if it is already present.
+    */
+    void set_texture(const std::string &name, Texture *texture);
 
     /**
         Begin drawing using this shader

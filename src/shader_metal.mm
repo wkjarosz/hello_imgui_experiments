@@ -2,6 +2,7 @@
 
 #include "renderpass.h"
 #include "shader.h"
+#include "texture.h"
 #include <iostream>
 
 #include "hello_imgui/hello_imgui.h"
@@ -262,43 +263,45 @@ void Shader::set_buffer(const std::string &name, VariableType dtype, size_t ndim
     buf.size  = size;
 }
 
-// void Shader::set_texture(const std::string &name, Texture *texture)
-// {
-//     auto it = m_buffers.find(name);
-//     if (it == m_buffers.end())
-//         throw std::runtime_error("Shader::set_texture(): could not find argument named \"" + name + "\"");
-//     Buffer &buf = m_buffers[name];
-//     if (!(buf.type == VertexTexture || buf.type == FragmentTexture))
-//         throw std::runtime_error("Shader::set_texture(): argument named \"" + name + "\" is not a texture!");
+void Shader::set_texture(const std::string &name, Texture *texture)
+{
+    auto it = m_buffers.find(name);
+    if (it == m_buffers.end())
+        throw std::runtime_error("Shader::set_texture(): could not find argument named \"" + name + "\"");
+    Buffer &buf = m_buffers[name];
+    if (!(buf.type == VertexTexture || buf.type == FragmentTexture))
+        throw std::runtime_error("Shader::set_texture(): argument named \"" + name + "\" is not a texture!");
 
-//     if (buf.buffer)
-//     {
-//         (void)(__bridge_transfer id<MTLTexture>)buf.buffer;
-//         buf.buffer = nullptr;
-//     }
+    if (buf.buffer)
+    {
+        [(id<MTLTexture>)buf.buffer release];
+        buf.buffer = nullptr;
+    }
 
-//     buf.buffer = (__bridge_retained void *)((__bridge id<MTLTexture>)texture->texture_handle());
+    // FIXME: might need to track ownership between texture and shader
+    buf.buffer = texture->texture_handle();
 
-//     std::string sampler_name;
-//     if (name.length() > 8 && name.compare(name.length() - 8, 8, "_texture") == 0)
-//         sampler_name = name.substr(0, name.length() - 8) + "_sampler";
-//     else
-//         sampler_name = name + "_sampler";
+    std::string sampler_name;
+    if (name.length() > 8 && name.compare(name.length() - 8, 8, "_texture") == 0)
+        sampler_name = name.substr(0, name.length() - 8) + "_sampler";
+    else
+        sampler_name = name + "_sampler";
 
-//     if (m_buffers.find(sampler_name) != m_buffers.end())
-//     {
-//         /* Also set the sampler state */
-//         Buffer &buf2 = m_buffers[sampler_name];
+    if (m_buffers.find(sampler_name) != m_buffers.end())
+    {
+        // Also set the sampler state
+        Buffer &buf2 = m_buffers[sampler_name];
 
-//         if (buf2.buffer)
-//         {
-//             (void)(__bridge_transfer id<MTLTexture>)buf2.buffer;
-//             buf2.buffer = nullptr;
-//         }
+        if (buf2.buffer)
+        {
+            [(id<MTLTexture>)buf2.buffer release];
+            buf2.buffer = nullptr;
+        }
 
-//         buf2.buffer = (__bridge_retained void *)((__bridge id<MTLSamplerState>)texture->sampler_state_handle());
-//     }
-// }
+        // FIXME: might need to track ownership between texture and shader
+        buf2.buffer = texture->sampler_state_handle();
+    }
+}
 
 void Shader::begin()
 {
