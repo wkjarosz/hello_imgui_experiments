@@ -1,4 +1,3 @@
-// The Metal version is still an untested work-in-progress
 #if defined(HELLOIMGUI_HAS_METAL)
 
 #include "renderpass.h"
@@ -147,7 +146,7 @@ Shader::Shader(RenderPass *render_pass, const std::string &name, const std::stri
         else
             throw std::runtime_error("Shader::Shader(): \"" + name + "\": unsupported argument type!");
 
-        fmt::print("vertex argument: {} of type {}\n", name, (int)buf.type);
+        // fmt::print("vertex argument: {} of type {}\n", name, (int)buf.type);
     }
 
     for (MTLArgument *arg in [reflection fragmentArguments])
@@ -169,7 +168,7 @@ Shader::Shader(RenderPass *render_pass, const std::string &name, const std::stri
         else
             throw std::runtime_error("Shader::Shader(): \"" + name + "\": unsupported argument type!");
 
-        fmt::print("vertex argument: {} of type {}\n", name, (int)buf.type);
+        // fmt::print("vertex argument: {} of type {}\n", name, (int)buf.type);
     }
 
     [reflection release];

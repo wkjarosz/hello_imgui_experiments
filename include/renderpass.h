@@ -11,8 +11,9 @@ using namespace linalg::aliases;
 
 class Shader;
 
-/// An abstraction for rendering passes that work with OpenGL, OpenGL ES, and Metal.
-/*
+/**
+    An abstraction for rendering passes that work with OpenGL, OpenGL ES, and Metal.
+
     This is a greatly simplified version of NanoGUI's RenderPass class. Original copyright follows.
     ----------
     NanoGUI was developed by Wenzel Jakob <wenzel.jakob@epfl.ch>.

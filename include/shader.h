@@ -10,8 +10,9 @@
 
 class RenderPass;
 
-/// An abstraction for shaders that work with OpenGL, OpenGL ES, and (at some point down the road, hopefully) Metal.
-/*
+/**
+    An abstraction for shaders that work with OpenGL, OpenGL ES, and Metal.
+
     This is adapted from NanoGUI's Shader class. Copyright follows.
     ----------
     NanoGUI was developed by Wenzel Jakob <wenzel.jakob@epfl.ch>.

@@ -149,6 +149,13 @@ if(fmt_ADDED)
   message(STATUS "fmt library added")
 endif()
 
+CPMAddPackage("gh:nothings/stb#a0a939058c579ddefd4c5671b046f29d12aeae01")
+if(stb_ADDED)
+  message(STATUS "stb library added")
+  add_library(stb INTERFACE IMPORTED)
+  target_include_directories(stb INTERFACE "${stb_SOURCE_DIR}")
+endif()
+
 set(HELLOIMGUI_USE_GLFW_METAL ON)
 
 # set(HELLOIMGUI_USE_GLFW_OPENGL3 ON)
@@ -197,7 +204,7 @@ set(HELLO_IMGUI_BUNDLE_SHORT_VERSION ${VERSION})
 set(HELLO_IMGUI_BUNDLE_ICON_FILE icon.icns)
 
 if(APPLE AND (HELLOIMGUI_USE_GLFW_METAL OR HELLOIMGUI_USE_SDL_METAL))
-  list(APPEND EXTRA_SOURCES src/renderpass_metal.mm src/shader_metal.mm)
+  list(APPEND EXTRA_SOURCES src/renderpass_metal.mm src/shader_metal.mm src/texture_metal.mm)
 endif()
 
 hello_imgui_add_app(
@@ -208,13 +215,15 @@ hello_imgui_add_app(
   src/shader.cpp
   src/shader_gl.cpp
   src/renderpass_gl.cpp
+  src/texture.cpp
+  src/texture_gl.cpp
   ${EXTRA_SOURCES}
   ASSETS_LOCATION
   ${CMAKE_CURRENT_BINARY_DIR}/assets
 )
 
 set_target_properties(HelloGuiExperiments PROPERTIES OUTPUT_NAME ${output_name} CXX_STANDARD 17)
-target_link_libraries(HelloGuiExperiments PRIVATE linalg fmt::fmt)
+target_link_libraries(HelloGuiExperiments PRIVATE linalg fmt::fmt stb)
 if(EMSCRIPTEN)
   target_link_options(
     HelloGuiExperiments
