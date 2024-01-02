@@ -149,13 +149,13 @@ if(fmt_ADDED)
   message(STATUS "fmt library added")
 endif()
 
-set(HELLOIMGUI_USE_GLFW_METAL ON)
+# set(HELLOIMGUI_USE_GLFW_METAL ON)
 
 # set(HELLOIMGUI_USE_GLFW_OPENGL3 ON)
 
 # set(HELLOIMGUI_USE_SDL_OPENGL3 ON)
 
-# set(HELLOIMGUI_USE_SDL_METAL ON)
+set(HELLOIMGUI_USE_SDL_METAL ON)
 
 CPMAddPackage("gh:pthom/hello_imgui#8abe2c98dbf99e3a098eb5548b0a079c9f4c8a8f")
 if(hello_imgui_ADDED)

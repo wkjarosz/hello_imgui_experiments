@@ -131,8 +131,6 @@ SampleViewer::SampleViewer()
 #if defined(HELLOIMGUI_HAS_METAL)
             m_shader = new Shader(m_render_pass, "Test shader", "shaders/test-shader.vertex",
                                   "shaders/test-shader.fragment", Shader::BlendMode::AlphaBlend);
-            // m_shader = new Shader(m_render_pass, "Test shader", "shaders/hdrimageview_vert.metal",
-            //                       "shaders/hdrimageview_frag.metal", Shader::BlendMode::AlphaBlend);
 #else
             m_shader = new Shader(m_render_pass, "Test shader", "shaders/test-shader.vert", "shaders/test-shader.frag",
                                   Shader::BlendMode::AlphaBlend);
@@ -142,8 +140,6 @@ SampleViewer::SampleViewer()
             // m_shader->set_buffer("position", vector<float2>{{0, 0}, {0, 1}, {1, 0}, {1, 1}});
             const float positions[] = {-1.f, -1.f, 1.f, -1.f, -1.f, 1.f, 1.f, -1.f, 1.f, 1.f, -1.f, 1.f};
             m_shader->set_buffer("position", VariableType::Float32, {6, 2}, positions);
-            m_shader->set_uniform("clear_color", float4{0.1, 0.2, 0.3, 1.0});
-            m_shader->set_uniform("clear_depth", 0.5f);
 
             HelloImGui::Log(HelloImGui::LogLevel::Info, "Successfully initialized GL!");
         }
