@@ -7,21 +7,35 @@
 using std::string;
 
 #if defined(HELLOIMGUI_HAS_METAL)
-static const string shader_extension{".metal"};
+static const string shader_extensions[] = {".metallib", ".metal"};
 #elif defined(HELLOIMGUI_HAS_OPENGL)
-static const string shader_extension{".glsl"};
+static const string shader_extensions[] = {".glsl",    ".vs",      ".fs",      ".gs",    ".vsf",  ".fsh",  ".gsh",
+                                           ".vshader", ".fshader", ".gshader", ".comp",  ".vert", ".tesc", ".tese",
+                                           ".frag",    ".geom",    ".glslv",   ".glslf", ".glslg"};
 #endif
+static const size_t num_extensions = sizeof(shader_extensions) / sizeof(shader_extensions[0]);
 
-std::string Shader::source_from_asset(std::string_view basename)
+std::string Shader::from_asset(std::string_view basename)
 {
-    string filename   = basename.data() + shader_extension;
-    auto   shader_txt = HelloImGui::LoadAssetFileData(filename.c_str());
-    if (shader_txt.data == nullptr)
-        throw std::runtime_error(fmt::format("Cannot load shader from file \"{}\"", filename));
+    for (size_t i = 0; i < num_extensions; ++i)
+    {
+        string filename = basename.data() + shader_extensions[i];
 
-    auto source = string((char *)shader_txt.data, shader_txt.dataSize);
-    HelloImGui::FreeAssetFileData(&shader_txt);
-    return source;
+        if (!HelloImGui::AssetExists(filename))
+            continue;
+
+        string full_path = HelloImGui::assetFileFullPath(filename);
+        fmt::print("Loading shader from \"{}\"...\n", full_path);
+        auto shader_txt = HelloImGui::LoadAssetFileData(filename.c_str());
+        if (shader_txt.data == nullptr)
+            throw std::runtime_error(fmt::format("Cannot load shader from file \"{}\"", filename));
+
+        auto source = string((char *)shader_txt.data, shader_txt.dataSize);
+        HelloImGui::FreeAssetFileData(&shader_txt);
+        return source;
+    }
+    throw std::runtime_error(fmt::format(
+        "Could not find a shader with base filename \"{}\" with any known shader file extensions.", basename));
 }
 
 void Shader::set_buffer_divisor(const std::string &name, size_t divisor)

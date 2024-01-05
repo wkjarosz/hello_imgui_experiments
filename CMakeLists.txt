@@ -220,7 +220,32 @@ set(HELLO_IMGUI_BUNDLE_SHORT_VERSION ${VERSION})
 set(HELLO_IMGUI_BUNDLE_ICON_FILE icon.icns)
 
 if(APPLE AND (HELLOIMGUI_USE_GLFW_METAL OR HELLOIMGUI_USE_SDL_METAL))
-  list(APPEND EXTRA_SOURCES src/renderpass_metal.mm src/shader_metal.mm src/texture_metal.mm)
+
+  # Precompile .metal shaders to .metallib files
+
+  # Glob up metal shaders
+  file(
+    GLOB_RECURSE metal_shaders
+    RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/assets/**.metal
+  )
+
+  foreach(shader ${metal_shaders})
+    set(shader_source "${CMAKE_CURRENT_SOURCE_DIR}/${shader}")
+    set(shader_lib "${CMAKE_CURRENT_BINARY_DIR}/${shader}lib")
+    # message(STATUS "Compiling Metal shader \"${shader_source}\" to MLTB library \"${shader_lib}\".")
+    add_custom_command(
+      OUTPUT ${shader_lib}
+      DEPENDS ${shader_source}
+      COMMAND xcrun -sdk macosx metal -std=osx-metal2.0 -O3 "${shader_source}" -o "${shader_lib}"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+      COMMENT "Compiling Metal shader \"${shader}\" to MLTB library \"${shader}lib\"."
+      VERBATIM
+    )
+    list(APPEND compiled_shaders ${shader_lib})
+  endforeach()
+
+  list(APPEND EXTRA_SOURCES src/renderpass_metal.mm src/shader_metal.mm src/texture_metal.mm ${compiled_shaders})
 endif()
 
 hello_imgui_add_app(

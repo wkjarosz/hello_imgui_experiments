@@ -137,14 +137,15 @@ SampleViewer::SampleViewer()
         try
         {
             m_render_pass = new RenderPass(false, true);
-            m_shader      = new Shader(m_render_pass, "Test shader", "shaders/gradient-shader_vert",
-                                       "shaders/gradient-shader_frag", Shader::BlendMode::AlphaBlend);
-            // m_shader      = new Shader(m_render_pass, "Test shader", "shaders/test-shader_vert",
-            //                            "shaders/image-shader_frag", Shader::BlendMode::AlphaBlend);
-            // m_null_image = new Texture(Texture::PixelFormat::R, Texture::ComponentFormat::Float32, {1, 1},
-            //                            Texture::InterpolationMode::Nearest, Texture::InterpolationMode::Nearest,
-            //                            Texture::WrapMode::Repeat);
-            // m_shader->set_texture("image", m_null_image);
+            // m_shader =
+            //     new Shader(m_render_pass, "Test shader", Shader::from_asset("shaders/gradient-shader_vert"),
+            //                Shader::from_asset("shaders/gradient-shader_frag"), Shader::BlendMode::AlphaBlend);
+            m_shader     = new Shader(m_render_pass, "Test shader", Shader::from_asset("shaders/image-shader_vert"),
+                                      Shader::from_asset("shaders/image-shader_frag"), Shader::BlendMode::AlphaBlend);
+            m_null_image = new Texture(Texture::PixelFormat::R, Texture::ComponentFormat::Float32, {1, 1},
+                                       Texture::InterpolationMode::Nearest, Texture::InterpolationMode::Nearest,
+                                       Texture::WrapMode::Repeat);
+            m_shader->set_texture("image", m_null_image);
 
             const float positions[] = {-1.f, -1.f, 1.f, -1.f, -1.f, 1.f, 1.f, -1.f, 1.f, 1.f, -1.f, 1.f};
             m_shader->set_buffer("position", VariableType::Float32, {6, 2}, positions);

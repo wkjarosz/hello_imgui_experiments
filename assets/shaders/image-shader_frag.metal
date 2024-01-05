@@ -1,4 +1,10 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
 using namespace metal;
+
+#include "colormaps.metal"
+#include "colorspaces.metal"
 
 struct VertexOut
 {

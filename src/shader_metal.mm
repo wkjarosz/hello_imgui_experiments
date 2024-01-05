@@ -60,15 +60,15 @@ id<MTLFunction> compile_metal_shader(id<MTLDevice> device, const std::string &na
     return function;
 }
 
-Shader::Shader(RenderPass *render_pass, const std::string &name, const std::string &vs_filename,
-               const std::string &fs_filename, BlendMode blend_mode) :
+Shader::Shader(RenderPass *render_pass, const std::string &name, const std::string &vs_source,
+               const std::string &fs_source, BlendMode blend_mode) :
     m_render_pass(render_pass),
     m_name(name), m_blend_mode(blend_mode)
 {
     auto           &gMetalGlobals = HelloImGui::GetMetalGlobals();
     id<MTLDevice>   device        = gMetalGlobals.caMetalLayer.device;
-    id<MTLFunction> fragment_func = compile_metal_shader(device, name, "fragment", source_from_asset(fs_filename)),
-                    vertex_func   = compile_metal_shader(device, name, "vertex", source_from_asset(vs_filename));
+    id<MTLFunction> fragment_func = compile_metal_shader(device, name, "fragment", fs_source),
+                    vertex_func   = compile_metal_shader(device, name, "vertex", vs_source);
 
     MTLRenderPipelineDescriptor *pipeline_desc = [MTLRenderPipelineDescriptor new];
     pipeline_desc.vertexFunction               = vertex_func;

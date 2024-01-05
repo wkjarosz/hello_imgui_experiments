@@ -46,16 +46,17 @@ public:
     };
 
     /**
-        Return the source text string of a shader in the apps assets directory.
+        Returns a text string with the source (or precompiled binary) of a shader found in the app's assets directory.
 
-        We assume GLSL(ES) shaders have an extension of `.glsl`, and Metal shaders use `.metal`.
+        We assume Metal shaders use `.metallib` for binary, and `.metal` for source, and GLSL(ES) shader sources use one
+       of a handful of common extensions like `.glsl` or `.fs` (see \ref shader.cpp for details).
 
         \param [in] basename
             The base filename (without extension) relative to the app's assets directory
         \return
-            A text string containing the source of the shader.
+            A text string containing the shader.
     */
-    static std::string source_from_asset(std::string_view basename);
+    static std::string from_asset(std::string_view basename);
 
     /**
         Initialize the shader using the source files (read from the assets directory).
@@ -72,8 +73,8 @@ public:
         \param fs_filename
             Filename of the fragment shader source code.
     */
-    Shader(RenderPass *render_pass, const std::string &name, const std::string &vs_filename,
-           const std::string &fs_filename, BlendMode blend_mode = BlendMode::None);
+    Shader(RenderPass *render_pass, const std::string &name, const std::string &vs_source, const std::string &fs_source,
+           BlendMode blend_mode = BlendMode::None);
 
     /// Release all resources
     virtual ~Shader();

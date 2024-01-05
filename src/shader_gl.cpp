@@ -59,14 +59,13 @@ static GLuint compile_gl_shader(GLenum type, const std::string &name, const std:
     return id;
 }
 
-Shader::Shader(RenderPass *render_pass, const std::string &name, const std::string &vs_filename,
-               const std::string &fs_filename, BlendMode blend_mode) :
+Shader::Shader(RenderPass *render_pass, const std::string &name, const std::string &vs_source,
+               const std::string &fs_source, BlendMode blend_mode) :
     m_render_pass(render_pass),
     m_name(name), m_blend_mode(blend_mode), m_shader_handle(0)
 {
-    auto   vertex_shader          = source_from_asset(vs_filename);
-    GLuint vertex_shader_handle   = compile_gl_shader(GL_VERTEX_SHADER, name, vertex_shader),
-           fragment_shader_handle = compile_gl_shader(GL_FRAGMENT_SHADER, name, source_from_asset(fs_filename));
+    GLuint vertex_shader_handle   = compile_gl_shader(GL_VERTEX_SHADER, name, vs_source),
+           fragment_shader_handle = compile_gl_shader(GL_FRAGMENT_SHADER, name, fs_source);
 
     m_shader_handle = glCreateProgram();
 
@@ -261,7 +260,7 @@ Shader::Shader(RenderPass *render_pass, const std::string &name, const std::stri
 #if defined(HELLOIMGUI_USE_GLAD)
     CHK(glGenVertexArrays(1, &m_vertex_array_handle));
 
-    m_uses_point_size = vertex_shader.find("gl_PointSize") != std::string::npos;
+    m_uses_point_size = vs_source.find("gl_PointSize") != std::string::npos;
 #endif
 }
 
