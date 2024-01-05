@@ -46,6 +46,18 @@ public:
     };
 
     /**
+        Return the source text string of a shader in the apps assets directory.
+
+        We assume GLSL(ES) shaders have an extension of `.glsl`, and Metal shaders use `.metal`.
+
+        \param [in] basename
+            The base filename (without extension) relative to the app's assets directory
+        \return
+            A text string containing the source of the shader.
+    */
+    static std::string source_from_asset(std::string_view basename);
+
+    /**
         Initialize the shader using the source files (read from the assets directory).
 
         \param render_pass

@@ -11,12 +11,21 @@
 
 #include "opengl_check.h"
 
+#include "texture.h"
 #include "timer.h"
 
 #include <cmath>
 #include <fmt/core.h>
 #include <fstream>
 #include <utility>
+
+#ifdef __EMSCRIPTEN__
+#include "emscripten_browser_file.h"
+#include <string_view>
+using std::string_view;
+#else
+#include "portable-file-dialogs.h"
+#endif
 
 #ifdef HELLOIMGUI_USE_SDL_OPENGL3
 #include <SDL.h>
@@ -128,16 +137,15 @@ SampleViewer::SampleViewer()
         try
         {
             m_render_pass = new RenderPass(false, true);
-#if defined(HELLOIMGUI_HAS_METAL)
-            m_shader = new Shader(m_render_pass, "Test shader", "shaders/test-shader.vertex",
-                                  "shaders/test-shader.fragment", Shader::BlendMode::AlphaBlend);
-#else
-            m_shader = new Shader(m_render_pass, "Test shader", "shaders/test-shader.vert", "shaders/test-shader.frag",
-                                  Shader::BlendMode::AlphaBlend);
-#endif
-            // m_shader->set_buffer("position", vector<float2>{{-1, -1}, {1, -1}, {-1, 1}, {1, 1}});
-            // m_shader->set_buffer("position", vector<float2>{{-1, -1}, {-1, 1}, {1, -1}, {1, 1}});
-            // m_shader->set_buffer("position", vector<float2>{{0, 0}, {0, 1}, {1, 0}, {1, 1}});
+            m_shader      = new Shader(m_render_pass, "Test shader", "shaders/gradient-shader_vert",
+                                       "shaders/gradient-shader_frag", Shader::BlendMode::AlphaBlend);
+            // m_shader      = new Shader(m_render_pass, "Test shader", "shaders/test-shader_vert",
+            //                            "shaders/image-shader_frag", Shader::BlendMode::AlphaBlend);
+            // m_null_image = new Texture(Texture::PixelFormat::R, Texture::ComponentFormat::Float32, {1, 1},
+            //                            Texture::InterpolationMode::Nearest, Texture::InterpolationMode::Nearest,
+            //                            Texture::WrapMode::Repeat);
+            // m_shader->set_texture("image", m_null_image);
+
             const float positions[] = {-1.f, -1.f, 1.f, -1.f, -1.f, 1.f, 1.f, -1.f, 1.f, 1.f, -1.f, 1.f};
             m_shader->set_buffer("position", VariableType::Float32, {6, 2}, positions);
 
@@ -153,6 +161,43 @@ SampleViewer::SampleViewer()
     // m_params.callbacks.PostInit = [this]() {
 
     // };
+
+    m_params.callbacks.ShowAppMenuItems = [this]()
+    {
+#ifndef __EMSCRIPTEN__
+        if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN " Open image..."))
+        {
+            auto result = pfd::open_file("Open image", "", {"Image files", "*.png *.jpeg *.jpg *.hdr *.bmp"}).result();
+            if (!result.empty())
+            {
+                HelloImGui::Log(HelloImGui::LogLevel::Debug, "Loading file '%s'...", result.front().c_str());
+                Texture *tex = new Texture(result.front());
+                m_shader->set_texture("image", tex);
+            }
+        }
+#else
+        static Texture *tex = nullptr;
+        ;
+        auto handle_upload_file =
+            [](const string &filename, const string &mime_type, string_view buffer, void *my_data = nullptr)
+        {
+            auto that{reinterpret_cast<SampleViewer *>(my_data)};
+            HelloImGui::Log(HelloImGui::LogLevel::Debug, "Loading file '%s' of mime type '%s' ...", filename.c_str(),
+                            mime_type.c_str());
+            delete tex;
+            tex = new Texture(filename, buffer);
+            that->m_shader->set_texture("image", tex);
+            delete tex;
+            tex = nullptr;
+        };
+        if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN " Open image..."))
+        {
+            // open the browser's file selector, and pass the file to the upload handler
+            emscripten_browser_file::upload(".png,.hdr,.jpg,.jpeg", handle_upload_file, this);
+            HelloImGui::Log(HelloImGui::LogLevel::Debug, "Requesting file from user");
+        }
+#endif
+    };
 
     m_params.callbacks.CustomBackground = [this]() { draw_background(); };
 }
@@ -197,8 +242,8 @@ void SampleViewer::draw_background()
 
         m_render_pass->resize(fbsize);
 
-        m_render_pass->set_viewport((viewport_offset)*fbscale, (viewport_size)*fbscale);
-        // m_render_pass->set_viewport({0, 0}, fbsize);
+        // m_render_pass->set_viewport((viewport_offset)*fbscale, (viewport_size)*fbscale);
+        m_render_pass->set_viewport({0, 0}, fbsize);
         // m_render_pass->set_clear_color(float4{fmod(frame++ / 100.f, 1.f), 0.2, 0.1, 1.0});
         m_render_pass->set_clear_color(m_bg_color);
         m_render_pass->set_cull_mode(RenderPass::CullMode::Disabled);

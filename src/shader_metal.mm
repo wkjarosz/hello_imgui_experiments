@@ -65,31 +65,10 @@ Shader::Shader(RenderPass *render_pass, const std::string &name, const std::stri
     m_render_pass(render_pass),
     m_name(name), m_blend_mode(blend_mode)
 {
-    auto         &gMetalGlobals = HelloImGui::GetMetalGlobals();
-    id<MTLDevice> device        = gMetalGlobals.caMetalLayer.device;
-
-    string vertex_shader, fragment_shader;
-    {
-        auto load_shader_file = [](const string &filename)
-        {
-            auto shader_txt = HelloImGui::LoadAssetFileData(filename.c_str());
-            if (shader_txt.data == nullptr)
-                throw std::runtime_error(fmt::format("Cannot load point shader from file \"{}\"", filename));
-
-            return shader_txt;
-        };
-        auto vs = load_shader_file(vs_filename);
-        auto fs = load_shader_file(fs_filename);
-
-        vertex_shader   = string((char *)vs.data, vs.dataSize);
-        fragment_shader = string((char *)fs.data, fs.dataSize);
-
-        HelloImGui::FreeAssetFileData(&vs);
-        HelloImGui::FreeAssetFileData(&fs);
-    }
-
-    id<MTLFunction> fragment_func = compile_metal_shader(device, name, "fragment", fragment_shader),
-                    vertex_func   = compile_metal_shader(device, name, "vertex", vertex_shader);
+    auto           &gMetalGlobals = HelloImGui::GetMetalGlobals();
+    id<MTLDevice>   device        = gMetalGlobals.caMetalLayer.device;
+    id<MTLFunction> fragment_func = compile_metal_shader(device, name, "fragment", source_from_asset(fs_filename)),
+                    vertex_func   = compile_metal_shader(device, name, "vertex", source_from_asset(vs_filename));
 
     MTLRenderPipelineDescriptor *pipeline_desc = [MTLRenderPipelineDescriptor new];
     pipeline_desc.vertexFunction               = vertex_func;

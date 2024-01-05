@@ -39,6 +39,7 @@ using namespace linalg::aliases;
 #include "misc/cpp/imgui_stdlib.h"
 #include "renderpass.h"
 #include "shader.h"
+#include "texture.h"
 #include <map>
 #include <string>
 #include <vector>
@@ -60,6 +61,7 @@ public:
 private:
     RenderPass *m_render_pass = nullptr;
     Shader     *m_shader      = nullptr;
+    Texture    *m_null_image  = nullptr;
 
     map<int, ImFont *> m_regular, m_bold; // regular and bold fonts at various sizes
 

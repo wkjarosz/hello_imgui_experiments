@@ -156,13 +156,29 @@ if(stb_ADDED)
   target_include_directories(stb INTERFACE "${stb_SOURCE_DIR}")
 endif()
 
-set(HELLOIMGUI_USE_GLFW_METAL ON)
+CPMAddPackage("gh:Armchair-Software/emscripten-browser-file#2ff8f8f791c0e7177b40e621ee3f758e03b31bf5")
+if(emscripten-browser-file_ADDED)
+  message(STATUS "emscripten-browser-file library added")
+  add_library(emscripten-browser-file INTERFACE IMPORTED)
+  target_include_directories(emscripten-browser-file INTERFACE "${emscripten-browser-file_SOURCE_DIR}")
+endif()
 
-# set(HELLOIMGUI_USE_GLFW_OPENGL3 ON)
+CPMAddPackage("gh:samhocevar/portable-file-dialogs#7f852d88a480020d7f91957cbcefe514fc95000c")
+if(portable-file-dialogs_ADDED)
+  message(STATUS "portable-file-dialogs library added")
+  add_library(portable-file-dialogs INTERFACE IMPORTED)
+  target_include_directories(portable-file-dialogs INTERFACE "${portable-file-dialogs_SOURCE_DIR}")
+endif()
 
-# set(HELLOIMGUI_USE_SDL_OPENGL3 ON)
+if(NOT EMSCRIPTEN)
+  set(HELLOIMGUI_USE_GLFW_METAL ON)
 
-# set(HELLOIMGUI_USE_SDL_METAL ON)
+  # set(HELLOIMGUI_USE_GLFW_OPENGL3 ON)
+
+  # set(HELLOIMGUI_USE_SDL_OPENGL3 ON)
+
+  # set(HELLOIMGUI_USE_SDL_METAL ON)
+endif()
 
 CPMAddPackage("gh:wkjarosz/hello_imgui#d9f414c69d560148a5cdbd1f24786d23383a72d3")
 if(hello_imgui_ADDED)
@@ -224,7 +240,9 @@ hello_imgui_add_app(
 
 set_target_properties(HelloGuiExperiments PROPERTIES OUTPUT_NAME ${output_name} CXX_STANDARD 17)
 target_link_libraries(HelloGuiExperiments PRIVATE linalg fmt::fmt stb)
+
 if(EMSCRIPTEN)
+  target_link_libraries(HelloGuiExperiments PRIVATE emscripten-browser-file)
   target_link_options(
     HelloGuiExperiments
     PRIVATE
@@ -235,6 +253,8 @@ if(EMSCRIPTEN)
     -sMIN_WEBGL_VERSION=2
   )
   hello_imgui_set_emscripten_target_initial_memory_megabytes(HelloGuiExperiments 120)
+else()
+  target_link_libraries(HelloGuiExperiments PRIVATE portable-file-dialogs)
 endif()
 
 if(UNIX AND NOT ${U_CMAKE_BUILD_TYPE} MATCHES DEBUG)

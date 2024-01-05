@@ -64,28 +64,9 @@ Shader::Shader(RenderPass *render_pass, const std::string &name, const std::stri
     m_render_pass(render_pass),
     m_name(name), m_blend_mode(blend_mode), m_shader_handle(0)
 {
-    string vertex_shader, fragment_shader;
-    {
-        auto load_shader_file = [](const string &filename)
-        {
-            auto shader_txt = HelloImGui::LoadAssetFileData(filename.c_str());
-            if (shader_txt.data == nullptr)
-                throw std::runtime_error(fmt::format("Cannot load point shader from file \"{}\"", filename));
-
-            return shader_txt;
-        };
-        auto vs = load_shader_file(vs_filename);
-        auto fs = load_shader_file(fs_filename);
-
-        vertex_shader   = string((char *)vs.data, vs.dataSize);
-        fragment_shader = string((char *)fs.data, fs.dataSize);
-
-        HelloImGui::FreeAssetFileData(&vs);
-        HelloImGui::FreeAssetFileData(&fs);
-    }
-
+    auto   vertex_shader          = source_from_asset(vs_filename);
     GLuint vertex_shader_handle   = compile_gl_shader(GL_VERTEX_SHADER, name, vertex_shader),
-           fragment_shader_handle = compile_gl_shader(GL_FRAGMENT_SHADER, name, fragment_shader);
+           fragment_shader_handle = compile_gl_shader(GL_FRAGMENT_SHADER, name, source_from_asset(fs_filename));
 
     m_shader_handle = glCreateProgram();
 
