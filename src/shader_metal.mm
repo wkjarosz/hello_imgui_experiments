@@ -253,7 +253,7 @@ void Shader::set_texture(const std::string &name, Texture *texture)
 
     if (buf.buffer)
     {
-        [(id<MTLTexture>)buf.buffer release];
+        // [(id<MTLTexture>)buf.buffer release];
         buf.buffer = nullptr;
     }
 

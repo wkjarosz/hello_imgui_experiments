@@ -1,5 +1,6 @@
 #if defined(HELLOIMGUI_HAS_OPENGL)
 
+#include "common.h"
 #include "hello_imgui/hello_imgui.h"
 #include "hello_imgui/hello_imgui_include_opengl.h" // cross-platform way to include OpenGL headers
 #include "opengl_check.h"
@@ -13,8 +14,9 @@
 #include <fmt/core.h>
 
 using std::string;
+using std::string_view;
 
-static GLuint compile_gl_shader(GLenum type, const std::string &name, const std::string &shader_string)
+static GLuint compile_gl_shader(GLenum type, string_view name, string_view shader_string)
 {
     if (shader_string.empty())
         return (GLuint)0;
@@ -27,7 +29,7 @@ static GLuint compile_gl_shader(GLenum type, const std::string &name, const std:
 #else
         "#version 330 core\n",
 #endif
-        shader_string.c_str()};
+        shader_string.data()};
     CHK(glShaderSource(id, 2, files, nullptr));
     CHK(glCompileShader(id));
 
@@ -51,9 +53,9 @@ static GLuint compile_gl_shader(GLenum type, const std::string &name, const std:
         char error_shader[4096];
         CHK(glGetShaderInfoLog(id, sizeof(error_shader), nullptr, error_shader));
 
-        std::string msg =
-            std::string("compile_gl_shader(): unable to compile ") + type_str + " \"" + name + "\":\n\n" + error_shader;
-        throw std::runtime_error(msg);
+        throw std::runtime_error(
+            fmt::format("compile_gl_shader(): unable to compile {} \"{}\":\n\n{}\n\nshader source:\n\n{}", type_str,
+                        name, error_shader, add_line_numbers(shader_string)));
     }
 
     return id;

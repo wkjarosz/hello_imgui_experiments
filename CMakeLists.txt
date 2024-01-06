@@ -22,7 +22,7 @@ elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
   set(VERSION_LONG "${GIT_DESCRIBE} (32 bit)")
 endif()
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/common.cpp.in ${CMAKE_CURRENT_BINARY_DIR}/src/common.cpp @ONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/version.cpp.in ${CMAKE_CURRENT_BINARY_DIR}/src/version.cpp @ONLY)
 
 include(sanitizers)
 
@@ -34,9 +34,13 @@ set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT HelloGuiExperiments)
 # Set a default build configuration (Release)
 # ============================================================================
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-  message(STATUS "Setting build type to 'Release' as none was specified.")
+  set(DEFAULT_BUILD_TYPE Release)
+  if(EMSCRIPTEN)
+    set(DEFAULT_BUILD_TYPE MinSizeRel)
+  endif()
+  message(STATUS "Setting build type to '${DEFAULT_BUILD_TYPE}' as none was specified.")
   set(CMAKE_BUILD_TYPE
-      Release
+      ${DEFAULT_BUILD_TYPE}
       CACHE STRING "Choose the type of build." FORCE
   )
   set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
@@ -157,9 +161,9 @@ if(portable-file-dialogs_ADDED)
 endif()
 
 if(NOT EMSCRIPTEN)
-  set(HELLOIMGUI_USE_GLFW_METAL ON)
+  # set(HELLOIMGUI_USE_GLFW_METAL ON)
 
-  # set(HELLOIMGUI_USE_GLFW_OPENGL3 ON)
+  set(HELLOIMGUI_USE_GLFW_OPENGL3 ON)
 
   # set(HELLOIMGUI_USE_SDL_OPENGL3 ON)
 
@@ -238,8 +242,9 @@ set(HELLO_IMGUI_BUNDLE_ICON_FILE icon.icns)
 
 hello_imgui_add_app(
   HelloGuiExperiments
-  ${CMAKE_CURRENT_BINARY_DIR}/src/common.cpp
+  ${CMAKE_CURRENT_BINARY_DIR}/src/version.cpp
   src/app.cpp
+  src/common.cpp
   src/opengl_check.cpp
   src/shader.cpp
   src/shader_gl.cpp

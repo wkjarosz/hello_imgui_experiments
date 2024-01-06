@@ -11,12 +11,14 @@
 
 #include "opengl_check.h"
 
+#include "dithermatrix256.h"
 #include "texture.h"
 #include "timer.h"
 
 #include <cmath>
 #include <fmt/core.h>
 #include <fstream>
+#include <random>
 #include <utility>
 
 #ifdef __EMSCRIPTEN__
@@ -42,6 +44,10 @@ EM_JS(int, screen_height, (), { return screen.height; });
 EM_JS(int, window_width, (), { return window.innerWidth; });
 EM_JS(int, window_height, (), { return window.innerHeight; });
 #endif
+
+static std::mt19937 g_rand(53);
+static const float  MIN_ZOOM = 0.01f;
+static const float  MAX_ZOOM = 512.f;
 
 SampleViewer::SampleViewer()
 {
@@ -139,24 +145,61 @@ SampleViewer::SampleViewer()
             m_render_pass = new RenderPass(false, true);
             m_render_pass->set_cull_mode(RenderPass::CullMode::Disabled);
             m_render_pass->set_depth_test(RenderPass::DepthTest::Always, false);
-            // m_shader =
-            //     new Shader(m_render_pass, "Test shader", Shader::from_asset("shaders/gradient-shader_vert"),
-            //                Shader::from_asset("shaders/gradient-shader_frag"), Shader::BlendMode::AlphaBlend);
-            m_shader     = new Shader(m_render_pass, "Test shader", Shader::from_asset("shaders/image-shader_vert"),
-                                      Shader::prepend_includes(Shader::from_asset("shaders/image-shader_frag"),
-                                                               {"shaders/colorspaces", "shaders/colormaps"}),
-                                      Shader::BlendMode::AlphaBlend);
+
+            m_shader = new Shader(m_render_pass,
+                                  /* An identifying name */
+                                  "ImageView", Shader::from_asset("shaders/image-shader_vert"),
+                                  Shader::prepend_includes(Shader::from_asset("shaders/image-shader_frag"),
+                                                           {"shaders/colorspaces", "shaders/colormaps"}),
+                                  Shader::BlendMode::AlphaBlend);
+
+            const float positions[] = {-1.f, -1.f, 1.f, -1.f, -1.f, 1.f, 1.f, -1.f, 1.f, 1.f, -1.f, 1.f};
+
+            m_shader->set_buffer("position", VariableType::Float32, {6, 2}, positions);
+            m_render_pass->set_cull_mode(RenderPass::CullMode::Disabled);
+
+            m_dither_tex = new Texture(Texture::PixelFormat::R, Texture::ComponentFormat::Float32, {256, 256},
+                                       Texture::InterpolationMode::Nearest, Texture::InterpolationMode::Nearest,
+                                       Texture::WrapMode::Repeat);
+            m_dither_tex->upload((const uint8_t *)dither_matrix256);
+            m_shader->set_texture("dither_texture", m_dither_tex);
+
+            // create an empty texture so that the shader doesn't print errors
+            // before we've selected a reference image
+            // FIXME: at some point, find a more elegant solution for this.
             m_null_image = new Texture(Texture::PixelFormat::RGBA, Texture::ComponentFormat::Float32, {1, 1},
                                        Texture::InterpolationMode::Nearest, Texture::InterpolationMode::Nearest,
                                        Texture::WrapMode::Repeat);
-            static float pixel[] = {0.5f, 0.5f, 0.5f, 1.f};
-            m_null_image->upload((const uint8_t *)&pixel);
-            m_shader->set_texture("image", m_null_image);
+            static const float4 null_tex{1.f, 1.f, 1.f, 1.f};
+            m_null_image->upload((const uint8_t *)&null_tex);
+            m_shader->set_texture("secondary_texture", m_null_image);
+            m_shader->set_texture("primary_texture", m_null_image);
 
-            const float positions[] = {-1.f, -1.f, 1.f, -1.f, -1.f, 1.f, 1.f, -1.f, 1.f, 1.f, -1.f, 1.f};
-            m_shader->set_buffer("position", VariableType::Float32, {6, 2}, positions);
-            m_shader->set_uniform("primary_pos", float2{0.f});
-            m_shader->set_uniform("primary_scale", float2{1.f});
+            // if (m_image)
+            //     m_shader->set_texture("primary_texture", m_image);
+            // else
+
+            // m_render_pass = new RenderPass(false, true);
+            // m_render_pass->set_cull_mode(RenderPass::CullMode::Disabled);
+            // m_render_pass->set_depth_test(RenderPass::DepthTest::Always, false);
+            // // m_shader =
+            // //     new Shader(m_render_pass, "Test shader", Shader::from_asset("shaders/gradient-shader_vert"),
+            // //                Shader::from_asset("shaders/gradient-shader_frag"), Shader::BlendMode::AlphaBlend);
+            // m_shader     = new Shader(m_render_pass, "Test shader", Shader::from_asset("shaders/image-shader_vert"),
+            //                           Shader::prepend_includes(Shader::from_asset("shaders/image-shader_frag"),
+            //                                                    {"shaders/colorspaces", "shaders/colormaps"}),
+            //                           Shader::BlendMode::AlphaBlend);
+            // m_null_image = new Texture(Texture::PixelFormat::RGBA, Texture::ComponentFormat::Float32, {1, 1},
+            //                            Texture::InterpolationMode::Nearest, Texture::InterpolationMode::Nearest,
+            //                            Texture::WrapMode::Repeat);
+            // static float pixel[] = {0.5f, 0.5f, 0.5f, 1.f};
+            // m_null_image->upload((const uint8_t *)&pixel);
+            // m_shader->set_texture("image", m_null_image);
+
+            // const float positions[] = {-1.f, -1.f, 1.f, -1.f, -1.f, 1.f, 1.f, -1.f, 1.f, 1.f, -1.f, 1.f};
+            // m_shader->set_buffer("position", VariableType::Float32, {6, 2}, positions);
+            // m_shader->set_uniform("primary_pos", float2{0.f});
+            // m_shader->set_uniform("primary_scale", float2{1.f});
 
             HelloImGui::Log(HelloImGui::LogLevel::Info, "Successfully initialized GL!");
         }
@@ -180,24 +223,32 @@ SampleViewer::SampleViewer()
             if (!result.empty())
             {
                 HelloImGui::Log(HelloImGui::LogLevel::Debug, "Loading file '%s'...", result.front().c_str());
-                Texture *tex = new Texture(result.front());
-                m_shader->set_texture("image", tex);
+                fmt::print("Hi0\n");
+                auto tex = new Texture(result.front(), Texture::InterpolationMode::Nearest,
+                                       Texture::InterpolationMode::Nearest, Texture::WrapMode::ClampToEdge);
+                // delete m_image;
+                fmt::print("Hi1\n");
+                // m_image = new Texture(result.front());
+                fmt::print("Hi2\n");
+                m_shader->set_texture("primary_texture", tex);
+                fmt::print("Hi3\n");
+                m_image_size = tex->size();
+                fmt::print("size: {},{}\n", m_image_size.x, m_image_size.y);
             }
         }
 #else
-        static Texture *tex = nullptr;
-        ;
         auto handle_upload_file =
             [](const string &filename, const string &mime_type, string_view buffer, void *my_data = nullptr)
         {
             auto that{reinterpret_cast<SampleViewer *>(my_data)};
             HelloImGui::Log(HelloImGui::LogLevel::Debug, "Loading file '%s' of mime type '%s' ...", filename.c_str(),
                             mime_type.c_str());
-            delete tex;
-            tex = new Texture(filename, buffer);
-            that->m_shader->set_texture("image", tex);
-            delete tex;
-            tex = nullptr;
+            // delete that->m_image;
+            // that->m_image = new Texture(filename, buffer);
+            auto tex = new Texture(filename, buffer, Texture::InterpolationMode::Nearest,
+                                   Texture::InterpolationMode::Nearest, Texture::WrapMode::ClampToEdge);
+            that->m_shader->set_texture("primary_texture", tex);
+            that->m_image_size = tex->size();
         };
         if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN " Open image..."))
         {
@@ -220,9 +271,79 @@ SampleViewer::~SampleViewer()
 {
 }
 
+void SampleViewer::zoom_by(float amount, float2 focus_pos)
+{
+    if (amount == 0.f)
+        return;
+
+    fmt::print("zoom by {}, {}, {}\n", amount, focus_pos.x, focus_pos.y);
+    auto  focused_pixel = pixel_at_position(focus_pos);
+    float scale_factor  = std::pow(m_zoom_sensitivity, amount);
+    m_zoom              = std::clamp(scale_factor * m_zoom, MIN_ZOOM, MAX_ZOOM);
+    set_pixel_at_position(focus_pos, focused_pixel);
+}
+
+float2 SampleViewer::pixel_at_position(float2 position) const
+{
+    auto image_pos = position - (m_offset + center_offset());
+    return image_pos / m_zoom;
+}
+
+float2 SampleViewer::position_at_pixel(float2 pixel) const
+{
+    return m_zoom * pixel + (m_offset + center_offset());
+}
+
+// float2 SampleViewer::screen_position_at_pixel(float2 pixel) const
+// {
+//     return position_at_pixel(pixel) + position_f();
+// }
+
+void SampleViewer::set_pixel_at_position(float2 position, float2 pixel)
+{
+    // Calculate where the new offset must be in order to satisfy the image position equation.
+    // Round the floating point values to balance out the floating point to integer conversions.
+    m_offset = position - (pixel * m_zoom);
+
+    // Clamp offset so that the image remains near the screen.
+    m_offset = max(min(m_offset, size_f()), -scaled_image_size_f());
+
+    m_offset -= center_offset();
+}
+
+float2 SampleViewer::scaled_image_size_f() const
+{
+    return m_zoom * float2{m_image_size};
+}
+
+float2 SampleViewer::size_f() const
+{
+    auto &io = ImGui::GetIO();
+    return float2{io.DisplaySize} * float2{io.DisplayFramebufferScale};
+}
+
+float2 SampleViewer::center_offset() const
+{
+    return (size_f() - scaled_image_size_f()) / 2;
+}
+
+void SampleViewer::image_position_and_scale(float2 &position, float2 &scale)
+{
+    scale    = scaled_image_size_f() / size_f();
+    position = (m_offset + center_offset()) / size_f();
+}
+
 void SampleViewer::draw_background()
 {
     auto &io = ImGui::GetIO();
+
+    if (!ImGui::GetIO().WantCaptureKeyboard)
+    {
+        if (ImGui::IsKeyPressed(ImGuiKey_E))
+            m_exposure += ImGui::IsKeyDown(ImGuiMod_Shift) ? 0.25f : -0.25f;
+        else if (ImGui::IsKeyPressed(ImGuiKey_G))
+            m_gamma = std::max(0.02f, m_gamma + (ImGui::IsKeyDown(ImGuiMod_Shift) ? 0.02f : -0.02f));
+    }
 
     try
     {
@@ -242,15 +363,35 @@ void SampleViewer::draw_background()
             viewport_offset   = int2{int(central_node->Pos.x), int(central_node->Pos.y)};
         }
 
+        if (!io.WantCaptureMouse)
+        {
+            auto p      = float2{io.MousePos} * float2{io.DisplayFramebufferScale};
+            auto scroll = float2{io.MouseWheelH, io.MouseWheel} * float2{io.DisplayFramebufferScale};
+#if defined(__EMSCRIPTEN__)
+            scroll *= 10.0f;
+#endif
+
+            if (ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+            {
+                set_pixel_at_position(p + float2{ImGui::GetMouseDragDelta(ImGuiMouseButton_Left)} *
+                                              float2{io.DisplayFramebufferScale},
+                                      pixel_at_position(p));
+                ImGui::ResetMouseDragDelta();
+            }
+            else if (ImGui::IsKeyDown(ImGuiMod_Shift))
+                // panning
+                set_pixel_at_position(p + scroll * 4.f, pixel_at_position(p));
+            else
+                zoom_by(scroll.y / 4.f, p);
+        }
+
         //
         // clear the framebuffer and set up the viewport
         //
 
         m_bg_color = float4{1.0, 1.5, 1.5, 1.0};
         // m_params.imGuiWindowParams.backgroundColor = m_bg_color;
-
         m_render_pass->resize(fbsize);
-
         // m_render_pass->set_viewport((viewport_offset)*fbscale, (viewport_size)*fbscale);
         m_render_pass->set_viewport({0, 0}, fbsize);
         // m_render_pass->set_clear_color(float4{fmod(frame++ / 100.f, 1.f), 0.2, 0.1, 1.0});
@@ -258,9 +399,46 @@ void SampleViewer::draw_background()
 
         m_render_pass->begin();
 
-        // m_shader->begin();
-        // m_shader->draw_array(Shader::PrimitiveType::TriangleStrip, 0, 4, false);
-        // m_shader->end();
+        float2 randomness(std::generate_canonical<float, 10>(g_rand) * 255,
+                          std::generate_canonical<float, 10>(g_rand) * 255);
+
+        m_shader->set_uniform("randomness", randomness);
+        m_shader->set_uniform("gain", powf(2.0f, m_exposure));
+        m_shader->set_uniform("gamma", m_gamma);
+        m_shader->set_uniform("sRGB", m_sRGB);
+        m_shader->set_uniform("clamp_to_LDR", m_clamp_to_LDR);
+        m_shader->set_uniform("do_dither", m_dither);
+
+        float2 curr_pos, curr_scale;
+        image_position_and_scale(curr_pos, curr_scale);
+        m_shader->set_uniform("primary_pos", curr_pos);
+        m_shader->set_uniform("primary_scale", curr_scale);
+
+        m_shader->set_uniform("blend_mode", 0);
+        m_shader->set_uniform("channel", 0);
+        m_shader->set_uniform("bg_mode", 2);
+        m_shader->set_uniform("bg_color", m_bg_color);
+
+        // if (m_reference_image)
+        // {
+        //     float2 ref_pos, ref_scale;
+        //     image_position_and_scale(ref_pos, ref_scale, m_reference_image);
+        //     m_shader->set_uniform("has_reference", true);
+        //     m_shader->set_uniform("secondary_pos", ref_pos);
+        //     m_shader->set_uniform("secondary_scale", ref_scale);
+        // }
+        // else
+        {
+            m_shader->set_uniform("has_reference", false);
+            m_shader->set_uniform("secondary_pos", float2(1.f, 1.f));
+            m_shader->set_uniform("secondary_scale", float2(1.f, 1.f));
+        }
+        // m_shader->set_texture("secondary_texture", m_null_image);
+        // if (m_image)
+        //     m_shader->set_texture("primary_texture", m_image);
+        // else
+        //     m_shader->set_texture("primary_texture", m_null_image);
+
         m_shader->begin();
         m_shader->draw_array(Shader::PrimitiveType::Triangle, 0, 6, false);
         m_shader->end();

@@ -37,7 +37,7 @@ struct VertexOut
 {
     float4 position [[position]];
     float2 primary_uv;
-    // float2 secondary_uv;
+    float2 secondary_uv;
 };
 
 float4 tonemap(const float4 color, const float gamma, const bool sRGB)
@@ -122,34 +122,26 @@ float4 sample(texture2d<float, access::sample> texture, sampler the_sampler, flo
 }
 
 fragment float4 fragment_main(VertexOut vert [[stage_in]],
-                              texture2d<float, access::sample> image,
-                            //   texture2d<float, access::sample> secondary_texture,
-                            //   texture2d<float, access::sample> dither_texture,
-                              sampler image_sampler
-                            //   ,
-                            //   sampler secondary_sampler,
-                            //   sampler dither_sampler,
-                            //   const constant bool& has_reference,
-                            //   const constant bool& do_dither,
-                            //   const constant float2 &randomness,
-                            //   const constant int &blend_mode,
-                            //   const constant int &channel,
-                            //   const constant float &gain,
-                            //   const constant float &gamma,
-                            //   const constant bool &sRGB,
-                            //   const constant bool &clamp_to_LDR,
-                            //   const constant int &bg_mode,
-                            //   const constant float4 &bg_color
+                              texture2d<float, access::sample> primary_texture,
+                              texture2d<float, access::sample> secondary_texture,
+                              texture2d<float, access::sample> dither_texture,
+                              sampler primary_sampler,
+                              sampler secondary_sampler,
+                              sampler dither_sampler,
+                              const constant bool& has_reference,
+                              const constant bool& do_dither,
+                              const constant float2 &randomness,
+                              const constant int &blend_mode,
+                              const constant int &channel,
+                              const constant float &gain,
+                              const constant float &gamma,
+                              const constant bool &sRGB,
+                              const constant bool &clamp_to_LDR,
+                              const constant int &bg_mode,
+                              const constant float4 &bg_color
                             )
 {
-    const int bg_mode = BG_DARK_CHECKER;
-    const int channel = CHANNEL_RGB;
-    const float3 gain = float3(1.0, 1.0, 1.0);
-    const float gamma = 2.2;
-    const bool sRGB = true;
-    const bool clamp_to_LDR = false;
-
-    float4 background(float3(0.0), 1.0);
+    float4 background(bg_color.rgb, 1.0);
     if (bg_mode == BG_BLACK)
         background.rgb = float3(0.0);
     else if (bg_mode == BG_WHITE)
@@ -163,22 +155,21 @@ fragment float4 fragment_main(VertexOut vert [[stage_in]],
     }
 
     bool in_img = all(vert.primary_uv < 1.0) and all(vert.primary_uv > 0.0);
-    // bool in_ref = all(vert.secondary_uv < 1.0) and all(vert.secondary_uv > 0.0);
+    bool in_ref = all(vert.secondary_uv < 1.0) and all(vert.secondary_uv > 0.0);
 
-    if (!in_img)// and !in_ref)
+    if (!in_img and !in_ref)
         return background;
 
-    float4 value = sample(image, image_sampler, vert.primary_uv, in_img);
+    float4 value = sample(primary_texture, primary_sampler, vert.primary_uv, in_img);
 
-    // if (has_reference)
-    // {
-    //     float4 reference_val = sample(secondary_texture, secondary_sampler, vert.secondary_uv, in_ref);
-    //     value = blend(value, reference_val, blend_mode);
-    // }
+    if (has_reference)
+    {
+        float4 reference_val = sample(secondary_texture, secondary_sampler, vert.secondary_uv, in_ref);
+        value = blend(value, reference_val, blend_mode);
+    }
 
-    // float4 foreground = dither(tonemap(choose_channel(value, channel) * float4(float3(gain), 1.0), gamma, sRGB), vert.position.xy, randomness, do_dither, dither_texture, dither_sampler);
-    float4 foreground = tonemap(choose_channel(value, channel) * float4(float3(gain), 1.0), gamma, sRGB);
+    float4 foreground = dither(tonemap(choose_channel(value, channel) * float4(float3(gain), 1.0), gamma, sRGB), vert.position.xy, randomness, do_dither, dither_texture, dither_sampler);
     float4 blended = foreground + background*(1-foreground.a);
-    blended = clamp(blended, clamp_to_LDR ? 0.0f : -64.0f, clamp_to_LDR ? 1.0f : 64.0f);
+    blended = clamp(blended, clamp_to_LDR ? 0.0 : -64.0, clamp_to_LDR ? 1.0 : 64.0);
     return float4(blended.rgb, 1.0);
 }

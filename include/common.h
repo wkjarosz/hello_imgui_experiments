@@ -16,6 +16,7 @@
 
 std::string to_lower(std::string str);
 std::string to_upper(std::string str);
+std::string add_line_numbers(std::string_view in);
 
 int         version_major();
 int         version_minor();
