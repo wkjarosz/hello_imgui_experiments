@@ -216,47 +216,37 @@ SampleViewer::SampleViewer()
 
     m_params.callbacks.ShowAppMenuItems = [this]()
     {
-#ifndef __EMSCRIPTEN__
         if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN " Open image..."))
         {
-            auto result = pfd::open_file("Open image", "", {"Image files", "*.png *.jpeg *.jpg *.hdr *.bmp"}).result();
+#ifndef __EMSCRIPTEN__
+            auto result = pfd::open_file("Open image", "", {"Image files", "*.png *.hdr *.jpeg *.jpg *.bmp"}).result();
             if (!result.empty())
             {
                 HelloImGui::Log(HelloImGui::LogLevel::Debug, "Loading file '%s'...", result.front().c_str());
-                fmt::print("Hi0\n");
-                auto tex = new Texture(result.front(), Texture::InterpolationMode::Nearest,
-                                       Texture::InterpolationMode::Nearest, Texture::WrapMode::ClampToEdge);
-                // delete m_image;
-                fmt::print("Hi1\n");
-                // m_image = new Texture(result.front());
-                fmt::print("Hi2\n");
-                m_shader->set_texture("primary_texture", tex);
-                fmt::print("Hi3\n");
-                m_image_size = tex->size();
-                fmt::print("size: {},{}\n", m_image_size.x, m_image_size.y);
+                delete m_image;
+                m_image = new Texture(result.front(), Texture::InterpolationMode::Nearest,
+                                      Texture::InterpolationMode::Nearest, Texture::WrapMode::ClampToEdge);
+                m_shader->set_texture("primary_texture", m_image);
             }
-        }
 #else
-        auto handle_upload_file =
-            [](const string &filename, const string &mime_type, string_view buffer, void *my_data = nullptr)
-        {
-            auto that{reinterpret_cast<SampleViewer *>(my_data)};
-            HelloImGui::Log(HelloImGui::LogLevel::Debug, "Loading file '%s' of mime type '%s' ...", filename.c_str(),
-                            mime_type.c_str());
-            // delete that->m_image;
-            // that->m_image = new Texture(filename, buffer);
-            auto tex = new Texture(filename, buffer, Texture::InterpolationMode::Nearest,
-                                   Texture::InterpolationMode::Nearest, Texture::WrapMode::ClampToEdge);
-            that->m_shader->set_texture("primary_texture", tex);
-            that->m_image_size = tex->size();
-        };
-        if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN " Open image..."))
-        {
+            auto handle_upload_file =
+                [](const string &filename, const string &mime_type, string_view buffer, void *my_data = nullptr)
+            {
+                auto that{reinterpret_cast<SampleViewer *>(my_data)};
+                HelloImGui::Log(HelloImGui::LogLevel::Debug, "Loading file '%s' of mime type '%s' ...",
+                                filename.c_str(), mime_type.c_str());
+                delete that->m_image;
+                that->m_image = new Texture(filename, buffer, Texture::InterpolationMode::Nearest,
+                                            Texture::InterpolationMode::Nearest, Texture::WrapMode::ClampToEdge);
+                that->m_shader->set_texture("primary_texture", that->m_image);
+            };
             // open the browser's file selector, and pass the file to the upload handler
-            emscripten_browser_file::upload(".png,.hdr,.jpg,.jpeg", handle_upload_file, this);
+            emscripten_browser_file::upload(".png,.hdr,.jpg,.jpeg,.bmp", handle_upload_file, this);
             HelloImGui::Log(HelloImGui::LogLevel::Debug, "Requesting file from user");
-        }
 #endif
+            if (m_image)
+                fmt::print("Loaded image of size: {},{}\n", m_image->size().x, m_image->size().y);
+        }
     };
 
     m_params.callbacks.CustomBackground = [this]() { draw_background(); };
@@ -313,7 +303,7 @@ void SampleViewer::set_pixel_at_position(float2 position, float2 pixel)
 
 float2 SampleViewer::scaled_image_size_f() const
 {
-    return m_zoom * float2{m_image_size};
+    return m_zoom * (m_image ? m_image->size() : int2{0.f});
 }
 
 float2 SampleViewer::size_f() const

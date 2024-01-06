@@ -84,7 +84,7 @@ private:
 
     RenderPass *m_render_pass = nullptr;
     Shader     *m_shader      = nullptr;
-    Texture    *m_null_image = nullptr, *m_dither_tex = nullptr;
+    Texture    *m_image = nullptr, *m_null_image = nullptr, *m_dither_tex = nullptr;
     int2        m_image_size{0, 0};
 
     float m_exposure = 0.f, m_gamma = 2.2f;
