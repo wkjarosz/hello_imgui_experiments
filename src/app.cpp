@@ -224,7 +224,7 @@ SampleViewer::SampleViewer()
             {
                 HelloImGui::Log(HelloImGui::LogLevel::Debug, "Loading file '%s'...", result.front().c_str());
                 delete m_image;
-                m_image = new Texture(result.front(), Texture::InterpolationMode::Nearest,
+                m_image = new Texture(result.front(), Texture::InterpolationMode::Trilinear,
                                       Texture::InterpolationMode::Nearest, Texture::WrapMode::ClampToEdge);
                 m_shader->set_texture("primary_texture", m_image);
             }
@@ -236,7 +236,7 @@ SampleViewer::SampleViewer()
                 HelloImGui::Log(HelloImGui::LogLevel::Debug, "Loading file '%s' of mime type '%s' ...",
                                 filename.c_str(), mime_type.c_str());
                 delete that->m_image;
-                that->m_image = new Texture(filename, buffer, Texture::InterpolationMode::Nearest,
+                that->m_image = new Texture(filename, buffer, Texture::InterpolationMode::Trilinear,
                                             Texture::InterpolationMode::Nearest, Texture::WrapMode::ClampToEdge);
                 that->m_shader->set_texture("primary_texture", that->m_image);
             };
