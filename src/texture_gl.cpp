@@ -288,7 +288,7 @@ static void gl_map_texture_format(Texture::PixelFormat &pixel_format, Texture::C
     switch (pixel_format)
     {
     case PixelFormat::R:
-#if defined(NANOGUI_USE_OPENGL)
+#if defined(HELLOIMGUI_USE_GLAD)
         pixel_format_gl = GL_RED;
 #else
         pixel_format_gl = GL_LUMINANCE;
@@ -300,7 +300,7 @@ static void gl_map_texture_format(Texture::PixelFormat &pixel_format, Texture::C
         case ComponentFormat::UInt16: internal_format_gl = GL_R16; break;
         case ComponentFormat::Float16: internal_format_gl = GL_R16F; break;
         case ComponentFormat::Float32: internal_format_gl = GL_R32F; break;
-#if defined(NANOGUI_USE_OPENGL)
+#if defined(HELLOIMGUI_USE_GLAD)
         case ComponentFormat::Int8: internal_format_gl = GL_R8_SNORM; break;
         case ComponentFormat::Int16: internal_format_gl = GL_R16_SNORM; break;
 #endif
@@ -309,7 +309,7 @@ static void gl_map_texture_format(Texture::PixelFormat &pixel_format, Texture::C
         break;
 
     case PixelFormat::RA:
-#if defined(NANOGUI_USE_OPENGL)
+#if defined(HELLOIMGUI_USE_GLAD)
         pixel_format_gl = GL_RG;
 #else
         pixel_format_gl = GL_LUMINANCE_ALPHA;
@@ -321,7 +321,7 @@ static void gl_map_texture_format(Texture::PixelFormat &pixel_format, Texture::C
         case ComponentFormat::UInt16: internal_format_gl = GL_RG16; break;
         case ComponentFormat::Float16: internal_format_gl = GL_RG16F; break;
         case ComponentFormat::Float32: internal_format_gl = GL_RG32F; break;
-#if defined(NANOGUI_USE_OPENGL)
+#if defined(HELLOIMGUI_USE_GLAD)
         case ComponentFormat::Int8: internal_format_gl = GL_RG8_SNORM; break;
         case ComponentFormat::Int16: internal_format_gl = GL_RG16_SNORM; break;
 #endif
@@ -338,7 +338,7 @@ static void gl_map_texture_format(Texture::PixelFormat &pixel_format, Texture::C
         case ComponentFormat::UInt16: internal_format_gl = GL_RGB16; break;
         case ComponentFormat::Float16: internal_format_gl = GL_RGB16F; break;
         case ComponentFormat::Float32: internal_format_gl = GL_RGB32F; break;
-#if defined(NANOGUI_USE_OPENGL)
+#if defined(HELLOIMGUI_USE_GLAD)
         case ComponentFormat::Int8: internal_format_gl = GL_RGB8_SNORM; break;
         case ComponentFormat::Int16: internal_format_gl = GL_RGB16_SNORM; break;
 #endif
@@ -355,7 +355,7 @@ static void gl_map_texture_format(Texture::PixelFormat &pixel_format, Texture::C
         case ComponentFormat::UInt16: internal_format_gl = GL_RGBA16; break;
         case ComponentFormat::Float16: internal_format_gl = GL_RGBA16F; break;
         case ComponentFormat::Float32: internal_format_gl = GL_RGBA32F; break;
-#if defined(NANOGUI_USE_OPENGL)
+#if defined(HELLOIMGUI_USE_GLAD)
         case ComponentFormat::Int8: internal_format_gl = GL_RGBA8_SNORM; break;
         case ComponentFormat::Int16: internal_format_gl = GL_RGBA16_SNORM; break;
 #endif

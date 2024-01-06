@@ -4,7 +4,7 @@
 #include "hello_imgui/hello_imgui_include_opengl.h" // cross-platform way to include OpenGL headers
 #include <fmt/core.h>
 
-bool check_glerror(const char *cmd)
+bool check_glerror(const char *cmd, const char *file, int line)
 {
     GLenum      err = glGetError();
     const char *msg = nullptr;
@@ -24,7 +24,7 @@ bool check_glerror(const char *cmd)
     default: msg = "unknown error"; break;
     }
 
-    fmt::print(stderr, "OpenGL error ({}) during operation \"{}\"!\n", msg, cmd);
+    fmt::print(stderr, "OpenGL error {}:{} ({}) during operation \"{}\"!\n", file, line, msg, cmd);
     HelloImGui::Log(HelloImGui::LogLevel::Error, "OpenGL error (%s) during operation \"%s\"!\n", msg, cmd);
     return true;
 }

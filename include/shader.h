@@ -59,6 +59,16 @@ public:
     static std::string from_asset(std::string_view basename);
 
     /**
+        Prepend the files in \ref include_files to the top of \ref shader_string
+
+        \param [] shader_string
+        \param [] include_files
+        \return
+    */
+    static std::string prepend_includes(std::string_view                     shader_string,
+                                        const std::vector<std::string_view> &include_files);
+
+    /**
         Initialize the shader using the source files (read from the assets directory).
 
         \param render_pass

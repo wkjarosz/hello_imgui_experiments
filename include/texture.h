@@ -96,6 +96,7 @@ public:
             InterpolationMode mag_interpolation_mode = InterpolationMode::Bilinear,
             WrapMode          wrap_mode              = WrapMode::ClampToEdge);
 
+    /// Load an image from memory (in the provided string_view)
     Texture(const std::string &filename, std::string_view data,
             InterpolationMode min_interpolation_mode = InterpolationMode::Bilinear,
             InterpolationMode mag_interpolation_mode = InterpolationMode::Bilinear,

@@ -3,7 +3,7 @@
 */
 #pragma once
 
-bool check_glerror(const char *cmd);
+bool check_glerror(const char *cmd, const char *file, int line);
 
 #if defined(NDEBUG)
 #define CHK(cmd) cmd
@@ -12,7 +12,7 @@ bool check_glerror(const char *cmd);
     do                                                                                                                 \
     {                                                                                                                  \
         cmd;                                                                                                           \
-        while (check_glerror(#cmd))                                                                                    \
+        while (check_glerror(#cmd, __FILE__, __LINE__))                                                                \
         {                                                                                                              \
         }                                                                                                              \
     } while (false)

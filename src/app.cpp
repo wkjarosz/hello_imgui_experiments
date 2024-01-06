@@ -137,18 +137,26 @@ SampleViewer::SampleViewer()
         try
         {
             m_render_pass = new RenderPass(false, true);
+            m_render_pass->set_cull_mode(RenderPass::CullMode::Disabled);
+            m_render_pass->set_depth_test(RenderPass::DepthTest::Always, false);
             // m_shader =
             //     new Shader(m_render_pass, "Test shader", Shader::from_asset("shaders/gradient-shader_vert"),
             //                Shader::from_asset("shaders/gradient-shader_frag"), Shader::BlendMode::AlphaBlend);
             m_shader     = new Shader(m_render_pass, "Test shader", Shader::from_asset("shaders/image-shader_vert"),
-                                      Shader::from_asset("shaders/image-shader_frag"), Shader::BlendMode::AlphaBlend);
-            m_null_image = new Texture(Texture::PixelFormat::R, Texture::ComponentFormat::Float32, {1, 1},
+                                      Shader::prepend_includes(Shader::from_asset("shaders/image-shader_frag"),
+                                                               {"shaders/colorspaces", "shaders/colormaps"}),
+                                      Shader::BlendMode::AlphaBlend);
+            m_null_image = new Texture(Texture::PixelFormat::RGBA, Texture::ComponentFormat::Float32, {1, 1},
                                        Texture::InterpolationMode::Nearest, Texture::InterpolationMode::Nearest,
                                        Texture::WrapMode::Repeat);
+            static float pixel[] = {0.5f, 0.5f, 0.5f, 1.f};
+            m_null_image->upload((const uint8_t *)&pixel);
             m_shader->set_texture("image", m_null_image);
 
             const float positions[] = {-1.f, -1.f, 1.f, -1.f, -1.f, 1.f, 1.f, -1.f, 1.f, 1.f, -1.f, 1.f};
             m_shader->set_buffer("position", VariableType::Float32, {6, 2}, positions);
+            m_shader->set_uniform("primary_pos", float2{0.f});
+            m_shader->set_uniform("primary_scale", float2{1.f});
 
             HelloImGui::Log(HelloImGui::LogLevel::Info, "Successfully initialized GL!");
         }
@@ -247,8 +255,6 @@ void SampleViewer::draw_background()
         m_render_pass->set_viewport({0, 0}, fbsize);
         // m_render_pass->set_clear_color(float4{fmod(frame++ / 100.f, 1.f), 0.2, 0.1, 1.0});
         m_render_pass->set_clear_color(m_bg_color);
-        m_render_pass->set_cull_mode(RenderPass::CullMode::Disabled);
-        m_render_pass->set_depth_test(RenderPass::DepthTest::Always, false);
 
         m_render_pass->begin();
 

@@ -1,13 +1,15 @@
 #include "shader.h"
 
 #include <fmt/core.h>
+#include <sstream>
 
 #include "hello_imgui/hello_imgui.h"
 
 using std::string;
+using std::string_view;
 
 #if defined(HELLOIMGUI_HAS_METAL)
-static const string shader_extensions[] = {".metallib", ".metal"};
+static const string shader_extensions[] = {".metallib", ".metal", ".h"};
 #elif defined(HELLOIMGUI_HAS_OPENGL)
 static const string shader_extensions[] = {".glsl",    ".vs",      ".fs",      ".gs",    ".vsf",  ".fsh",  ".gsh",
                                            ".vshader", ".fshader", ".gshader", ".comp",  ".vert", ".tesc", ".tese",
@@ -15,7 +17,7 @@ static const string shader_extensions[] = {".glsl",    ".vs",      ".fs",      "
 #endif
 static const size_t num_extensions = sizeof(shader_extensions) / sizeof(shader_extensions[0]);
 
-std::string Shader::from_asset(std::string_view basename)
+string Shader::from_asset(string_view basename)
 {
     for (size_t i = 0; i < num_extensions; ++i)
     {
@@ -38,7 +40,46 @@ std::string Shader::from_asset(std::string_view basename)
         "Could not find a shader with base filename \"{}\" with any known shader file extensions.", basename));
 }
 
-void Shader::set_buffer_divisor(const std::string &name, size_t divisor)
+string Shader::prepend_includes(string_view shader_string, const std::vector<string_view> &include_files)
+{
+    // if the shader_string is actually a precompiled binary, we can't prepend
+    if (shader_string.size() > 4 && strncmp(shader_string.data(), "MTLB", 4) == 0)
+    {
+        fmt::print(stderr, "Cannot add #includes to precompiled shaders, skipping.\n");
+        return string(shader_string);
+    }
+
+    std::string includes;
+
+    for (auto &i : include_files)
+        includes += from_asset(i) + "\n";
+
+    if (includes.empty())
+        return string(shader_string);
+
+    std::istringstream iss(shader_string.data());
+    std::ostringstream oss;
+    std::string        line;
+
+    // first copy over all the #include or #version lines. these should stay at the top of the shader
+    while (std::getline(iss, line) && (line.substr(0, 8) == "#include" || line.substr(0, 8) == "#version"))
+        oss << line << std::endl;
+
+    // now insert the new #includes
+    oss << includes;
+
+    // and copy over the rest of the lines in the shader
+    do
+    {
+        oss << line << std::endl;
+    } while (std::getline(iss, line));
+
+    // spdlog::trace("GLSL #includes: {};\n MERGED: {}", includes, oss.str());
+
+    return oss.str();
+}
+
+void Shader::set_buffer_divisor(const string &name, size_t divisor)
 {
     auto it = m_buffers.find(name);
     if (it == m_buffers.end())
@@ -49,7 +90,7 @@ void Shader::set_buffer_divisor(const std::string &name, size_t divisor)
     buf.dirty            = true;
 }
 
-void Shader::set_buffer_pointer_offset(const std::string &name, size_t offset)
+void Shader::set_buffer_pointer_offset(const string &name, size_t offset)
 {
     auto it = m_buffers.find(name);
     if (it == m_buffers.end())
@@ -60,9 +101,9 @@ void Shader::set_buffer_pointer_offset(const std::string &name, size_t offset)
     buf.dirty          = true;
 }
 
-std::string Shader::Buffer::to_string() const
+string Shader::Buffer::to_string() const
 {
-    std::string result = "Buffer[type=";
+    string result = "Buffer[type=";
     switch (type)
     {
     case BufferType::VertexBuffer: result += "vertex"; break;
