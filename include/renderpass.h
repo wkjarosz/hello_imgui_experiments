@@ -121,8 +121,14 @@ public:
     void resize(const int2 &size);
 
 #if defined(HELLOIMGUI_HAS_METAL)
-    void *command_encoder() const;
-    void *command_buffer() const;
+    void *command_encoder() const
+    {
+        return m_command_encoder;
+    }
+    void *command_buffer() const
+    {
+        return m_command_buffer;
+    }
 #endif
 
 protected:
@@ -137,7 +143,17 @@ protected:
     CullMode  m_cull_mode;
     bool      m_active = false;
 
-    // hide the platform-specific details via PIMPL
-    struct Pimpl;
-    Pimpl *m_data;
+#if defined(HELLOIMGUI_HAS_OPENGL)
+    int4 m_viewport_backup, m_scissor_backup;
+    bool m_depth_test_backup;
+    bool m_depth_write_backup;
+    bool m_scissor_test_backup;
+    bool m_cull_face_backup;
+    bool m_blend_backup;
+#elif defined(HELLOIMGUI_HAS_METAL)
+    void                   *m_command_buffer;
+    void                   *m_command_encoder;
+    void                   *m_pass_descriptor;
+    std::unique_ptr<Shader> m_clear_shader;
+#endif
 };

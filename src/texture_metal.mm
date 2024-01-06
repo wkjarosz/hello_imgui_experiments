@@ -40,20 +40,20 @@ void Texture::init()
     sampler_desc.tAddressMode   = wrap_mode_mtl;
     id<MTLSamplerState> sampler = [device newSamplerStateWithDescriptor:sampler_desc];
 
-    m_sampler_state_handle = (void *)sampler;
+    m_sampler_state_handle = (__bridge_retained void *)sampler;
 }
 
 Texture::~Texture()
 {
-    [(id<MTLTexture>)m_texture_handle release];
-    [(id<MTLSamplerState>)m_sampler_state_handle release];
+    (void)(__bridge_transfer id<MTLTexture>)m_texture_handle;
+    (void)(__bridge_transfer id<MTLSamplerState>)m_sampler_state_handle;
 }
 
 void Texture::upload(const uint8_t *data)
 {
     auto &gMetalGlobals = HelloImGui::GetMetalGlobals();
 
-    id<MTLTexture> texture = (id<MTLTexture>)m_texture_handle;
+    id<MTLTexture> texture = (__bridge id<MTLTexture>)m_texture_handle;
 
     MTLTextureDescriptor *texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:texture.pixelFormat
                                                                                             width:(NSUInteger)m_size.x
@@ -93,7 +93,7 @@ void Texture::upload_sub_region(const uint8_t *data, const int2 &origin, const i
 {
     auto &gMetalGlobals = HelloImGui::GetMetalGlobals();
 
-    id<MTLTexture> texture = (id<MTLTexture>)m_texture_handle;
+    id<MTLTexture> texture = (__bridge id<MTLTexture>)m_texture_handle;
 
     MTLTextureDescriptor *texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:texture.pixelFormat
                                                                                             width:(NSUInteger)size.x
@@ -140,7 +140,7 @@ void Texture::download(uint8_t *data)
     size_t row_bytes = bytes_per_pixel() * m_size.x, img_bytes = row_bytes * m_size.y;
 
     id<MTLDevice>  device  = gMetalGlobals.caMetalLayer.device;
-    id<MTLTexture> texture = (id<MTLTexture>)m_texture_handle;
+    id<MTLTexture> texture = (__bridge id<MTLTexture>)m_texture_handle;
     id<MTLBuffer>  buffer  = [device newBufferWithLength:img_bytes options:MTLResourceStorageModeShared];
 
     [command_encoder copyFromTexture:texture
@@ -166,7 +166,7 @@ void Texture::resize(const int2 &size)
     m_size = size;
     if (m_texture_handle)
     {
-        [(id<MTLTexture>)m_texture_handle release];
+        (void)(__bridge_transfer id<MTLTexture>)m_texture_handle;
         m_texture_handle = nullptr;
     }
 
@@ -307,7 +307,7 @@ void Texture::resize(const int2 &size)
         throw std::runtime_error("Texture::Texture(): flags must either pecify ShaderRead, RenderTarget, or both!");
 
     id<MTLTexture> texture = [device newTextureWithDescriptor:texture_desc];
-    m_texture_handle       = (void *)texture;
+    m_texture_handle       = (__bridge_retained void *)texture;
 }
 
 void Texture::generate_mipmap()

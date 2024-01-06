@@ -10,27 +10,10 @@
 
 #include <fmt/core.h>
 
-struct RenderPass::Pimpl
-{
-    id<MTLCommandBuffer>        command_buffer  = nullptr;
-    id<MTLRenderCommandEncoder> command_encoder = nullptr;
-    MTLRenderPassDescriptor    *pass_descriptor = nullptr;
-    std::unique_ptr<Shader>     clear_shader;
-
-    Pimpl()
-    {
-        pass_descriptor = [MTLRenderPassDescriptor new];
-    }
-
-    ~Pimpl()
-    {
-        [pass_descriptor release];
-    }
-};
-
 RenderPass::RenderPass(bool write_depth, bool clear) :
     m_clear(clear), m_depth_test(write_depth ? DepthTest::Less : DepthTest::Always), m_depth_write(write_depth),
-    m_cull_mode(CullMode::Back), m_data(new RenderPass::Pimpl)
+    m_cull_mode(CullMode::Back),
+    m_pass_descriptor((__bridge_retained void *)[MTLRenderPassDescriptor renderPassDescriptor])
 {
     set_clear_color(m_clear_color);
     set_clear_depth(m_clear_depth);
@@ -38,17 +21,7 @@ RenderPass::RenderPass(bool write_depth, bool clear) :
 
 RenderPass::~RenderPass()
 {
-    delete m_data;
-}
-
-void *RenderPass::command_encoder() const
-{
-    return (void *)m_data->command_encoder;
-}
-
-void *RenderPass::command_buffer() const
-{
-    return (void *)m_data->command_buffer;
+    (void)(__bridge_transfer MTLRenderPassDescriptor *)m_pass_descriptor;
 }
 
 void RenderPass::begin()
@@ -60,23 +33,28 @@ void RenderPass::begin()
 
     auto &gMetalGlobals = HelloImGui::GetMetalGlobals();
 
-    m_data->command_buffer = [gMetalGlobals.mtlCommandQueue commandBuffer];
-    if (m_data->command_buffer == nullptr)
+    id<MTLCommandBuffer> command_buffer = [gMetalGlobals.mtlCommandQueue commandBuffer];
+    if (command_buffer == nullptr)
         throw std::runtime_error("RenderPass::begin(): could not create a Metal command buffer.");
+
+    MTLRenderPassDescriptor *pass_descriptor = (__bridge MTLRenderPassDescriptor *)m_pass_descriptor;
 
     bool clear_manual = false; // m_clear && (m_viewport_offset != int2(0, 0) || m_viewport_size !=
                                // m_framebuffer_size);
 
-    m_data->pass_descriptor.colorAttachments[0].texture = gMetalGlobals.caMetalDrawable.texture;
-    m_data->pass_descriptor.colorAttachments[0].loadAction =
-        m_clear && !clear_manual ? MTLLoadActionClear : MTLLoadActionLoad;
-    m_data->pass_descriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
+    MTLRenderPassAttachmentDescriptor *att = pass_descriptor.colorAttachments[0];
 
-    m_data->command_encoder = [m_data->command_buffer renderCommandEncoderWithDescriptor:m_data->pass_descriptor];
+    att.texture     = gMetalGlobals.caMetalDrawable.texture;
+    att.loadAction  = m_clear && !clear_manual ? MTLLoadActionClear : MTLLoadActionLoad;
+    att.storeAction = MTLStoreActionStore;
 
-    [m_data->command_encoder setFrontFacingWinding:MTLWindingCounterClockwise];
+    id<MTLRenderCommandEncoder> command_encoder = [command_buffer renderCommandEncoderWithDescriptor:pass_descriptor];
 
-    m_active = true;
+    [command_encoder setFrontFacingWinding:MTLWindingCounterClockwise];
+
+    m_command_buffer  = (__bridge_retained void *)command_buffer;
+    m_command_encoder = (__bridge_retained void *)command_encoder;
+    m_active          = true;
 
     set_viewport(m_viewport_offset, m_viewport_size);
 
@@ -87,23 +65,22 @@ void RenderPass::begin()
         depth_desc.depthWriteEnabled          = true;
         id<MTLDepthStencilState> depth_state =
             [gMetalGlobals.caMetalLayer.device newDepthStencilStateWithDescriptor:depth_desc];
-        [m_data->command_encoder setDepthStencilState:depth_state];
+        [command_encoder setDepthStencilState:depth_state];
 
-        if (!m_data->clear_shader)
+        if (!m_clear_shader)
         {
-            m_data->clear_shader =
+            m_clear_shader =
                 std::make_unique<Shader>(this, "clear shader", "shaders/clear.vertex", "shaders/clear.fragment");
 
             const float positions[] = {-1.f, -1.f, 1.f, -1.f, -1.f, 1.f, 1.f, -1.f, 1.f, 1.f, -1.f, 1.f};
-            m_data->clear_shader->set_buffer("position", VariableType::Float32, {6, 2}, positions);
+            m_clear_shader->set_buffer("position", VariableType::Float32, {6, 2}, positions);
         }
 
-        m_data->clear_shader->set_uniform("clear_color", m_clear_color);
-        m_data->clear_shader->set_uniform("clear_depth", m_clear_depth);
-        m_data->clear_shader->begin();
-        m_data->clear_shader->draw_array(Shader::PrimitiveType::Triangle, 0, 6, false);
-        m_data->clear_shader->end();
-        [depth_desc release];
+        m_clear_shader->set_uniform("clear_color", m_clear_color);
+        m_clear_shader->set_uniform("clear_depth", m_clear_depth);
+        m_clear_shader->begin();
+        m_clear_shader->draw_array(Shader::PrimitiveType::Triangle, 0, 6, false);
+        m_clear_shader->end();
     }
 
     set_depth_test(m_depth_test, m_depth_write);
@@ -115,23 +92,18 @@ void RenderPass::end()
 #if !defined(NDEBUG)
     if (!m_active)
         throw std::runtime_error("RenderPass::end(): render pass is not active!");
-
-    if (m_data->command_buffer == nullptr)
+    if (m_command_buffer == nullptr)
         throw std::runtime_error("RenderPass::end(): no Metal command buffer present.");
-    if (m_data->command_encoder == nullptr)
+    if (m_command_encoder == nullptr)
         throw std::runtime_error("RenderPass::end(): no Metal command encoder present.");
 #endif
-
-    [m_data->command_encoder endEncoding];
-    [m_data->command_buffer commit];
-
-    [m_data->command_buffer release];
-    [m_data->command_encoder release];
-
-    m_data->command_encoder = nullptr;
-    m_data->command_buffer  = nullptr;
-
-    m_active = false;
+    id<MTLCommandBuffer>        command_buffer  = (__bridge_transfer id<MTLCommandBuffer>)m_command_buffer;
+    id<MTLRenderCommandEncoder> command_encoder = (__bridge_transfer id<MTLRenderCommandEncoder>)m_command_encoder;
+    [command_encoder endEncoding];
+    [command_buffer commit];
+    m_command_encoder = nullptr;
+    m_command_buffer  = nullptr;
+    m_active          = false;
 }
 
 void RenderPass::resize(const int2 &size)
@@ -146,11 +118,12 @@ void RenderPass::set_clear_color(const float4 &color)
     m_clear_color = color;
 
 #if !defined(NDEBUG)
-    if (m_data->pass_descriptor == nullptr)
+    if (m_pass_descriptor == nullptr)
         throw std::runtime_error("RenderPass::set_clear_color(): no Metal render pass descriptor present.");
 #endif
+    MTLRenderPassDescriptor *pass_descriptor = (__bridge MTLRenderPassDescriptor *)m_pass_descriptor;
 
-    m_data->pass_descriptor.colorAttachments[0].clearColor = MTLClearColorMake(color.x, color.y, color.z, color.w);
+    pass_descriptor.colorAttachments[0].clearColor = MTLClearColorMake(color.x, color.y, color.z, color.w);
 }
 
 void RenderPass::set_clear_depth(float depth)
@@ -158,11 +131,11 @@ void RenderPass::set_clear_depth(float depth)
     m_clear_depth = depth;
 
 #if !defined(NDEBUG)
-    if (m_data->pass_descriptor == nullptr)
+    if (m_pass_descriptor == nullptr)
         throw std::runtime_error("RenderPass::set_clear_color(): no Metal render pass descriptor present.");
 #endif
-
-    m_data->pass_descriptor.depthAttachment.clearDepth = depth;
+    MTLRenderPassDescriptor *pass_descriptor   = (__bridge MTLRenderPassDescriptor *)m_pass_descriptor;
+    pass_descriptor.depthAttachment.clearDepth = depth;
 }
 
 void RenderPass::set_viewport(const int2 &offset, const int2 &size)
@@ -171,13 +144,13 @@ void RenderPass::set_viewport(const int2 &offset, const int2 &size)
     m_viewport_size   = size;
     if (m_active)
     {
-        [m_data->command_encoder
+        id<MTLRenderCommandEncoder> command_encoder = (__bridge id<MTLRenderCommandEncoder>)m_command_encoder;
+        [command_encoder
             setViewport:(MTLViewport){(double)offset.x, (double)offset.y, (double)size.x, (double)size.y, 0.0, 1.0}];
         int2 scissor_size   = max(min(offset + size, m_framebuffer_size) - offset, int2(0));
         int2 scissor_offset = max(min(offset, m_framebuffer_size), int2(0));
-        [m_data->command_encoder
-            setScissorRect:(MTLScissorRect){(NSUInteger)scissor_offset.x, (NSUInteger)scissor_offset.y,
-                                            (NSUInteger)scissor_size.x, (NSUInteger)scissor_size.y}];
+        [command_encoder setScissorRect:(MTLScissorRect){(NSUInteger)scissor_offset.x, (NSUInteger)scissor_offset.y,
+                                                         (NSUInteger)scissor_size.x, (NSUInteger)scissor_size.y}];
     }
 }
 
@@ -188,7 +161,7 @@ void RenderPass::set_depth_test(DepthTest depth_test, bool depth_write)
     if (m_active)
     {
 #if !defined(NDEBUG)
-        if (m_data->command_encoder == nullptr)
+        if (m_command_encoder == nullptr)
             throw std::runtime_error("set_depth_test::end(): no Metal command encoder present.");
 #endif
         MTLDepthStencilDescriptor *depth_desc = [MTLDepthStencilDescriptor new];
@@ -215,9 +188,8 @@ void RenderPass::set_depth_test(DepthTest depth_test, bool depth_write)
         id<MTLDepthStencilState> depth_state =
             [gMetalGlobals.caMetalLayer.device newDepthStencilStateWithDescriptor:depth_desc];
 
-        [m_data->command_encoder setDepthStencilState:depth_state];
-        [depth_desc release];
-        [depth_state release];
+        id<MTLRenderCommandEncoder> command_encoder = (__bridge id<MTLRenderCommandEncoder>)m_command_encoder;
+        [command_encoder setDepthStencilState:depth_state];
     }
 }
 
@@ -227,7 +199,7 @@ void RenderPass::set_cull_mode(CullMode cull_mode)
     if (m_active)
     {
 #if !defined(NDEBUG)
-        if (m_data->command_encoder == nullptr)
+        if (m_command_encoder == nullptr)
             throw std::runtime_error("set_depth_test::end(): no Metal command encoder present.");
 #endif
         MTLCullMode cull_mode_mtl;
@@ -239,7 +211,8 @@ void RenderPass::set_cull_mode(CullMode cull_mode)
         default: throw std::runtime_error("Shader::set_cull_mode(): invalid cull mode!");
         }
 
-        [m_data->command_encoder setCullMode:cull_mode_mtl];
+        id<MTLRenderCommandEncoder> command_encoder = (__bridge id<MTLRenderCommandEncoder>)m_command_encoder;
+        [command_encoder setCullMode:cull_mode_mtl];
     }
 }
 
