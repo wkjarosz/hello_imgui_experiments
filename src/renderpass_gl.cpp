@@ -7,25 +7,14 @@
 #include <fmt/core.h>
 #include <stdexcept>
 
-struct RenderPass::Pimpl
-{
-    int4 viewport_backup, scissor_backup;
-    bool depth_test_backup;
-    bool depth_write_backup;
-    bool scissor_test_backup;
-    bool cull_face_backup;
-    bool blend_backup;
-};
-
 RenderPass::RenderPass(bool write_depth, bool clear) :
     m_clear(clear), m_depth_test(write_depth ? DepthTest::Less : DepthTest::Always), m_depth_write(write_depth),
-    m_cull_mode(CullMode::Back), m_data(new RenderPass::Pimpl)
+    m_cull_mode(CullMode::Back)
 {
 }
 
 RenderPass::~RenderPass()
 {
-    delete m_data;
 }
 
 void RenderPass::begin()
@@ -36,16 +25,16 @@ void RenderPass::begin()
 #endif
     m_active = true;
 
-    CHK(glGetIntegerv(GL_VIEWPORT, &m_data->viewport_backup[0]));
-    CHK(glGetIntegerv(GL_SCISSOR_BOX, &m_data->scissor_backup[0]));
+    CHK(glGetIntegerv(GL_VIEWPORT, &m_viewport_backup[0]));
+    CHK(glGetIntegerv(GL_SCISSOR_BOX, &m_scissor_backup[0]));
     GLboolean depth_write;
     CHK(glGetBooleanv(GL_DEPTH_WRITEMASK, &depth_write));
-    m_data->depth_write_backup = depth_write;
+    m_depth_write_backup = depth_write;
 
-    m_data->depth_test_backup   = glIsEnabled(GL_DEPTH_TEST);
-    m_data->scissor_test_backup = glIsEnabled(GL_SCISSOR_TEST);
-    m_data->cull_face_backup    = glIsEnabled(GL_CULL_FACE);
-    m_data->blend_backup        = glIsEnabled(GL_BLEND);
+    m_depth_test_backup   = glIsEnabled(GL_DEPTH_TEST);
+    m_scissor_test_backup = glIsEnabled(GL_SCISSOR_TEST);
+    m_cull_face_backup    = glIsEnabled(GL_CULL_FACE);
+    m_blend_backup        = glIsEnabled(GL_BLEND);
 
     set_viewport(m_viewport_offset, m_viewport_size);
 
@@ -67,7 +56,7 @@ void RenderPass::begin()
     set_depth_test(m_depth_test, m_depth_write);
     set_cull_mode(m_cull_mode);
 
-    if (m_data->blend_backup)
+    if (m_blend_backup)
         CHK(glDisable(GL_BLEND));
 }
 
@@ -78,29 +67,27 @@ void RenderPass::end()
         throw std::runtime_error("RenderPass::end(): render pass is not active!");
 #endif
 
-    CHK(glViewport(m_data->viewport_backup[0], m_data->viewport_backup[1], m_data->viewport_backup[2],
-                   m_data->viewport_backup[3]));
-    CHK(glScissor(m_data->scissor_backup[0], m_data->scissor_backup[1], m_data->scissor_backup[2],
-                  m_data->scissor_backup[3]));
+    CHK(glViewport(m_viewport_backup[0], m_viewport_backup[1], m_viewport_backup[2], m_viewport_backup[3]));
+    CHK(glScissor(m_scissor_backup[0], m_scissor_backup[1], m_scissor_backup[2], m_scissor_backup[3]));
 
-    if (m_data->depth_test_backup)
+    if (m_depth_test_backup)
         CHK(glEnable(GL_DEPTH_TEST));
     else
         CHK(glDisable(GL_DEPTH_TEST));
 
-    CHK(glDepthMask(m_data->depth_write_backup));
+    CHK(glDepthMask(m_depth_write_backup));
 
-    if (m_data->scissor_test_backup)
+    if (m_scissor_test_backup)
         CHK(glEnable(GL_SCISSOR_TEST));
     else
         CHK(glDisable(GL_SCISSOR_TEST));
 
-    if (m_data->cull_face_backup)
+    if (m_cull_face_backup)
         CHK(glEnable(GL_CULL_FACE));
     else
         CHK(glDisable(GL_CULL_FACE));
 
-    if (m_data->blend_backup)
+    if (m_blend_backup)
         CHK(glEnable(GL_BLEND));
     else
         CHK(glDisable(GL_BLEND));

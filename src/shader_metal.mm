@@ -78,13 +78,15 @@ Shader::Shader(RenderPass *render_pass, const std::string &name, const std::stri
 
     if (blend_mode == BlendMode::AlphaBlend)
     {
-        pipeline_desc.colorAttachments[0].blendingEnabled             = YES;
-        pipeline_desc.colorAttachments[0].rgbBlendOperation           = MTLBlendOperationAdd;
-        pipeline_desc.colorAttachments[0].alphaBlendOperation         = MTLBlendOperationAdd;
-        pipeline_desc.colorAttachments[0].sourceRGBBlendFactor        = MTLBlendFactorSourceAlpha;
-        pipeline_desc.colorAttachments[0].sourceAlphaBlendFactor      = MTLBlendFactorSourceAlpha;
-        pipeline_desc.colorAttachments[0].destinationRGBBlendFactor   = MTLBlendFactorOneMinusSourceAlpha;
-        pipeline_desc.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+        MTLRenderPipelineColorAttachmentDescriptor *att = pipeline_desc.colorAttachments[0];
+
+        att.blendingEnabled             = YES;
+        att.rgbBlendOperation           = MTLBlendOperationAdd;
+        att.alphaBlendOperation         = MTLBlendOperationAdd;
+        att.sourceRGBBlendFactor        = MTLBlendFactorSourceAlpha;
+        att.sourceAlphaBlendFactor      = MTLBlendFactorSourceAlpha;
+        att.destinationRGBBlendFactor   = MTLBlendFactorOneMinusSourceAlpha;
+        att.destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
     }
 
     pipeline_desc.sampleCount = 1;
@@ -103,9 +105,9 @@ Shader::Shader(RenderPass *render_pass, const std::string &name, const std::stri
                                  std::string(error_pipeline));
     }
 
-    [error release];
+    // [error release];
 
-    m_pipeline_state = (void *)pipeline_state;
+    m_pipeline_state = (__bridge_retained void *)pipeline_state;
 
     for (MTLArgument *arg in [reflection vertexArguments])
     {
@@ -151,8 +153,6 @@ Shader::Shader(RenderPass *render_pass, const std::string &name, const std::stri
         // fmt::print("vertex argument: {} of type {}\n", name, (int)buf.type);
     }
 
-    [reflection release];
-
     Buffer &buf = m_buffers["indices"];
     buf.index   = -1;
     buf.type    = IndexBuffer;
@@ -169,17 +169,17 @@ Shader::~Shader()
             if (buf.size <= METAL_BUFFER_THRESHOLD)
                 delete[] (uint8_t *)buf.buffer;
             else
-                [(id<MTLBuffer>)buf.buffer release];
+                (void)(__bridge_transfer id<MTLBuffer>)buf.buffer;
         }
         else if (buf.type == VertexTexture || buf.type == FragmentTexture)
-            [(id<MTLTexture>)buf.buffer release];
+            (void)(__bridge_transfer id<MTLTexture>)buf.buffer;
         else if (buf.type == VertexSampler || buf.type == FragmentSampler)
-            [(id<MTLSamplerState>)buf.buffer release];
+            (void)(__bridge_transfer id<MTLSamplerState>)buf.buffer;
         else
             fmt::print(stderr, "Shader::~Shader(): unknown buffer type!\n");
     }
 
-    [(id<MTLRenderPipelineState>)m_pipeline_state release];
+    (void)(__bridge_transfer id<MTLRenderPipelineState>)m_pipeline_state;
 }
 
 void Shader::set_buffer(const std::string &name, VariableType dtype, size_t ndim, const size_t *shape, const void *data)
@@ -202,7 +202,7 @@ void Shader::set_buffer(const std::string &name, VariableType dtype, size_t ndim
         if (buf.size <= METAL_BUFFER_THRESHOLD)
             delete[] (uint8_t *)buf.buffer;
         else
-            [(id<MTLBuffer>)buf.buffer release];
+            (void)(__bridge_transfer id<MTLBuffer>)buf.buffer;
         buf.buffer = nullptr;
     }
 
@@ -219,7 +219,7 @@ void Shader::set_buffer(const std::string &name, VariableType dtype, size_t ndim
         id<MTLBuffer> mtl_buffer;
 
         if (buf.buffer)
-            mtl_buffer = (id<MTLBuffer>)buf.buffer;
+            mtl_buffer = (__bridge_transfer id<MTLBuffer>)buf.buffer;
         else
             mtl_buffer = [device newBufferWithLength:size options:MTLResourceStorageModePrivate];
 
@@ -234,7 +234,7 @@ void Shader::set_buffer(const std::string &name, VariableType dtype, size_t ndim
         [command_buffer commit];
         [command_buffer waitUntilCompleted];
 
-        buf.buffer = (void *)mtl_buffer;
+        buf.buffer = (__bridge_retained void *)mtl_buffer;
     }
 
     buf.dtype = dtype;
@@ -253,12 +253,11 @@ void Shader::set_texture(const std::string &name, Texture *texture)
 
     if (buf.buffer)
     {
-        [(id<MTLTexture>)buf.buffer release];
+        (void)(__bridge_transfer id<MTLTexture>)buf.buffer;
         buf.buffer = nullptr;
     }
 
-    // FIXME: might need to track ownership between texture and shader
-    buf.buffer = texture->texture_handle();
+    buf.buffer = (__bridge_retained void *)((__bridge id<MTLTexture>)texture->texture_handle());
 
     std::string sampler_name;
     if (name.length() > 8 && name.compare(name.length() - 8, 8, "_texture") == 0)
@@ -273,19 +272,18 @@ void Shader::set_texture(const std::string &name, Texture *texture)
 
         if (buf2.buffer)
         {
-            [(id<MTLTexture>)buf2.buffer release];
+            (void)(__bridge_transfer id<MTLTexture>)buf2.buffer;
             buf2.buffer = nullptr;
         }
 
-        // FIXME: might need to track ownership between texture and shader
-        buf2.buffer = texture->sampler_state_handle();
+        buf2.buffer = (__bridge_retained void *)((__bridge id<MTLSamplerState>)texture->sampler_state_handle());
     }
 }
 
 void Shader::begin()
 {
-    auto pipeline_state = (id<MTLRenderPipelineState>)m_pipeline_state;
-    auto command_enc    = (id<MTLRenderCommandEncoder>)m_render_pass->command_encoder();
+    id<MTLRenderPipelineState>  pipeline_state = (__bridge id<MTLRenderPipelineState>)m_pipeline_state;
+    id<MTLRenderCommandEncoder> command_enc    = (__bridge id<MTLRenderCommandEncoder>)m_render_pass->command_encoder();
 
     [command_enc setRenderPipelineState:pipeline_state];
 
@@ -303,28 +301,28 @@ void Shader::begin()
         {
         case VertexTexture:
         {
-            auto texture = (id<MTLTexture>)buf.buffer;
+            id<MTLTexture> texture = (__bridge id<MTLTexture>)buf.buffer;
             [command_enc setVertexTexture:texture atIndex:buf.index];
         }
         break;
 
         case FragmentTexture:
         {
-            auto texture = (id<MTLTexture>)buf.buffer;
+            id<MTLTexture> texture = (__bridge id<MTLTexture>)buf.buffer;
             [command_enc setFragmentTexture:texture atIndex:buf.index];
         }
         break;
 
         case VertexSampler:
         {
-            auto state = (id<MTLSamplerState>)buf.buffer;
+            id<MTLSamplerState> state = (__bridge id<MTLSamplerState>)buf.buffer;
             [command_enc setVertexSamplerState:state atIndex:buf.index];
         }
         break;
 
         case FragmentSampler:
         {
-            auto state = (id<MTLSamplerState>)buf.buffer;
+            id<MTLSamplerState> state = (__bridge id<MTLSamplerState>)buf.buffer;
             [command_enc setFragmentSamplerState:state atIndex:buf.index];
         }
         break;
@@ -341,7 +339,7 @@ void Shader::begin()
             }
             else
             {
-                auto buffer = (id<MTLBuffer>)buf.buffer;
+                id<MTLBuffer> buffer = (__bridge id<MTLBuffer>)buf.buffer;
                 if (buf.type == VertexBuffer)
                     [command_enc setVertexBuffer:buffer offset:0 atIndex:buf.index];
                 else if (buf.type == FragmentBuffer)
@@ -370,7 +368,7 @@ void Shader::draw_array(PrimitiveType primitive_type, size_t offset, size_t coun
     default: throw std::runtime_error("Shader::draw_array(): invalid primitive type!");
     }
 
-    auto command_enc = (id<MTLRenderCommandEncoder>)m_render_pass->command_encoder();
+    id<MTLRenderCommandEncoder> command_enc = (__bridge id<MTLRenderCommandEncoder>)m_render_pass->command_encoder();
 
     if (!indexed)
     {
@@ -378,7 +376,7 @@ void Shader::draw_array(PrimitiveType primitive_type, size_t offset, size_t coun
     }
     else
     {
-        auto index_buffer = (id<MTLBuffer>)m_buffers["indices"].buffer;
+        id<MTLBuffer> index_buffer = (__bridge id<MTLBuffer>)m_buffers["indices"].buffer;
         [command_enc drawIndexedPrimitives:primitive_type_mtl
                                 indexCount:count
                                  indexType:MTLIndexTypeUInt32

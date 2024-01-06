@@ -252,6 +252,7 @@ hello_imgui_add_app(
 )
 
 set_target_properties(HelloGuiExperiments PROPERTIES OUTPUT_NAME ${output_name} CXX_STANDARD 17)
+target_compile_options(HelloGuiExperiments PRIVATE "-fobjc-arc")
 target_link_libraries(HelloGuiExperiments PRIVATE linalg fmt::fmt stb)
 
 if(EMSCRIPTEN)
