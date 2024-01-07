@@ -33,6 +33,8 @@ using std::string_view;
 #include <SDL.h>
 #endif
 
+#include "stb_image.h"
+
 using namespace linalg::ostream_overloads;
 
 using std::to_string;
@@ -48,8 +50,11 @@ static std::mt19937 g_rand(53);
 static const float  MIN_ZOOM = 0.01f;
 static const float  MAX_ZOOM = 512.f;
 
-SampleViewer::SampleViewer()
+SampleViewer::SampleViewer() : m_image_pixels(nullptr, stbi_image_free)
 {
+    stbi_ldr_to_hdr_scale(1.0f);
+    stbi_ldr_to_hdr_gamma(1.0f);
+
     // set up HelloImGui parameters
     m_params.appWindowParams.windowGeometry.size     = {1200, 800};
     m_params.appWindowParams.windowTitle             = "HelloGuiExperiments";
@@ -124,20 +129,58 @@ SampleViewer::SampleViewer()
 
     m_params.callbacks.LoadAdditionalFonts = [this]()
     {
-        std::string roboto_r  = "fonts/Roboto/Roboto-Regular.ttf";
-        std::string roboto_b  = "fonts/Roboto/Roboto-Bold.ttf";
-        std::string robotom_r = "fonts/Roboto/RobotoMono-Regular.ttf";
-        std::string robotom_b = "fonts/Roboto/RobotoMono-Bold.ttf";
-        if (!HelloImGui::AssetExists(roboto_r) || !HelloImGui::AssetExists(roboto_b) ||
-            !HelloImGui::AssetExists(robotom_r) || !HelloImGui::AssetExists(robotom_b))
+        std::string sans_r = "fonts/Roboto/Roboto-Regular.ttf";
+        std::string sans_b = "fonts/Roboto/Roboto-Bold.ttf";
+        // std::string mono_r = "fonts/Roboto/RobotoMono-Regular.ttf";
+        // std::string mono_b = "fonts/Roboto/RobotoMono-Bold.ttf";
+        std::string mono_r = "fonts/Inconsolata-Regular.ttf";
+        std::string mono_b = "fonts/Inconsolata-Bold.ttf";
+        if (!HelloImGui::AssetExists(sans_r) || !HelloImGui::AssetExists(sans_b) || !HelloImGui::AssetExists(mono_r) ||
+            !HelloImGui::AssetExists(mono_b))
             return;
 
         for (auto font_size : {14, 10, 16, 18, 30})
         {
-            m_sans_regular[font_size] = HelloImGui::LoadFontTTF_WithFontAwesomeIcons(roboto_r, (float)font_size);
-            m_sans_bold[font_size]    = HelloImGui::LoadFontTTF_WithFontAwesomeIcons(roboto_b, (float)font_size);
-            m_mono_regular[font_size] = HelloImGui::LoadFontTTF_WithFontAwesomeIcons(robotom_r, (float)font_size);
-            m_mono_bold[font_size]    = HelloImGui::LoadFontTTF_WithFontAwesomeIcons(robotom_b, (float)font_size);
+            m_sans_regular[font_size] = HelloImGui::LoadFontTTF_WithFontAwesomeIcons(sans_r, (float)font_size);
+            m_sans_bold[font_size]    = HelloImGui::LoadFontTTF_WithFontAwesomeIcons(sans_b, (float)font_size);
+            m_mono_regular[font_size] = HelloImGui::LoadFontTTF(mono_r, (float)font_size);
+            m_mono_bold[font_size]    = HelloImGui::LoadFontTTF(mono_b, (float)font_size);
+        }
+    };
+
+    m_params.callbacks.ShowStatus = [this]()
+    {
+        if (m_image && m_image_pixels)
+        {
+            auto &io = ImGui::GetIO();
+
+            int2 p(pixel_at_position(io.MousePos));
+            ImGui::PushFont(m_mono_regular[14]);
+
+            if (p.x > 0 && p.y > 0 && p.x < m_image->size().x && p.y < m_image->size().y)
+            {
+                float4 color32 = image_pixel(p);
+                float4 color8  = linalg::clamp(color32 * pow(2.f, m_exposure) * 255, 0.f, 255.f);
+
+                // ImGui::SetCursorPosY(ImGui::GetCursorPosY() - ImGui::GetFontSize() * 0.15f);
+                ImGui::TextUnformatted(
+                    fmt::format("({:>4d},{:>4d}) = ({:>6.3f},{:>6.3f},{:>6.3f},{:>6.3f})/({:>3d},{:>3d},{:>3d},{:>3d})",
+                                p.x, p.y, color32.x, color32.y, color32.z, color32.w, (int)round(color8.x),
+                                (int)round(color8.y), (int)round(color8.z), (int)round(color8.w))
+                        .c_str());
+                // ImGui::SetCursorPosY(ImGui::GetCursorPosY() + ImGui::GetFontSize() * 0.15f);
+            }
+
+            // ImGui::SetCursorPosY(ImGui::GetCursorPosY() - ImGui::GetFontSize() * 0.15f);
+            float  real_zoom = m_zoom * pixel_ratio();
+            int    numer     = (real_zoom < 1.0f) ? 1 : (int)round(real_zoom);
+            int    denom     = (real_zoom < 1.0f) ? (int)round(1.0f / real_zoom) : 1;
+            auto   text      = fmt::format("{:7.2f}% ({:d}:{:d})", real_zoom * 100, numer, denom);
+            float2 text_size = ImGui::CalcTextSize(text.c_str());
+            ImGui::SameLine(ImGui::GetIO().DisplaySize.x - text_size.x - 16.f * ImGui::GetFontSize());
+            ImGui::TextUnformatted(text.c_str());
+            // ImGui::SetCursorPosY(ImGui::GetCursorPosY() + ImGui::GetFontSize() * 0.15f);
+            ImGui::PopFont();
         }
     };
 
@@ -202,8 +245,21 @@ SampleViewer::SampleViewer()
             {
                 HelloImGui::Log(HelloImGui::LogLevel::Debug, "Loading file '%s'...", result.front().c_str());
                 delete m_image;
-                m_image = new Texture(result.front(), Texture::InterpolationMode::Trilinear,
-                                      Texture::InterpolationMode::Nearest, Texture::WrapMode::ClampToEdge);
+                // m_image         = new Texture(result.front(), Texture::InterpolationMode::Trilinear,
+                //                               Texture::InterpolationMode::Nearest, Texture::WrapMode::ClampToEdge);
+                string filename = result.front();
+                int2   image_size;
+                m_image_pixels = PixelData{
+                    (float4 *)stbi_loadf(filename.c_str(), &image_size.x, &image_size.y, nullptr, 4), stbi_image_free};
+                if (!m_image_pixels)
+                    throw std::runtime_error("Could not load texture data from file \"" + filename +
+                                             "\". Reason: " + stbi_failure_reason());
+                m_image = new Texture(Texture::PixelFormat::RGBA, Texture::ComponentFormat::Float32, image_size,
+                                      Texture::InterpolationMode::Trilinear, Texture::InterpolationMode::Nearest,
+                                      Texture::WrapMode::ClampToEdge, 1, Texture::TextureFlags::ShaderRead);
+                if (m_image->pixel_format() != Texture::PixelFormat::RGBA)
+                    throw std::runtime_error("Pixel format not supported by the hardware!");
+                m_image->upload((const uint8_t *)m_image_pixels.get());
                 m_shader->set_texture("primary_texture", m_image);
             }
 #else
@@ -214,8 +270,22 @@ SampleViewer::SampleViewer()
                 HelloImGui::Log(HelloImGui::LogLevel::Debug, "Loading file '%s' of mime type '%s' ...",
                                 filename.c_str(), mime_type.c_str());
                 delete that->m_image;
-                that->m_image = new Texture(filename, buffer, Texture::InterpolationMode::Trilinear,
-                                            Texture::InterpolationMode::Nearest, Texture::WrapMode::ClampToEdge);
+                // that->m_image = new Texture(filename, buffer, Texture::InterpolationMode::Trilinear,
+                //                             Texture::InterpolationMode::Nearest, Texture::WrapMode::ClampToEdge);
+                int2 image_size;
+                that->m_image_pixels =
+                    PixelData{(float4 *)stbi_loadf_from_memory((const stbi_uc *)buffer.begin(), buffer.length(),
+                                                               &image_size.x, &image_size.y, nullptr, 4),
+                              stbi_image_free};
+                if (!that->m_image_pixels)
+                    throw std::runtime_error("Could not load texture data from file \"" + filename +
+                                             "\". Reason: " + stbi_failure_reason());
+                that->m_image = new Texture(Texture::PixelFormat::RGBA, Texture::ComponentFormat::Float32, image_size,
+                                            Texture::InterpolationMode::Trilinear, Texture::InterpolationMode::Nearest,
+                                            Texture::WrapMode::ClampToEdge, 1, Texture::TextureFlags::ShaderRead);
+                if (that->m_image->pixel_format() != Texture::PixelFormat::RGBA)
+                    throw std::runtime_error("Pixel format not supported by the hardware!");
+                that->m_image->upload((const uint8_t *)that->m_image_pixels.get());
                 that->m_shader->set_texture("primary_texture", that->m_image);
             };
             // open the browser's file selector, and pass the file to the upload handler
@@ -362,27 +432,26 @@ float2 SampleViewer::image_scale() const
     return scaled_image_size_f() / size_f();
 }
 
-void SampleViewer::draw_text(const int2 &pos, const string &text, const float4 &color, ImFont *font, int align) const
+void SampleViewer::draw_text(float2 pos, const string &text, const float4 &color, ImFont *font, int align) const
 {
     ImGui::PushFont(font);
-    float2 apos{pos};
     float2 size = ImGui::CalcTextSize(text.c_str());
 
-    if (align & TextAlign_LEFT)
-        apos.x = pos.x;
-    else if (align & TextAlign_CENTER)
-        apos.x -= 0.5f * size.x;
+    // if (align & TextAlign_LEFT)
+    //     pos.x = pos.x;
+    if (align & TextAlign_CENTER)
+        pos.x -= 0.5f * size.x;
     else if (align & TextAlign_RIGHT)
-        apos.x -= size.x;
+        pos.x -= size.x;
 
-    if (align & TextAlign_TOP)
-        apos.y = pos.y;
-    else if (align & TextAlign_MIDDLE)
-        apos.y -= 0.5f * size.y;
+    // if (align & TextAlign_TOP)
+    //     pos.y = pos.y;
+    if (align & TextAlign_MIDDLE)
+        pos.y -= 0.5f * size.y;
     else if (align & TextAlign_BOTTOM)
-        apos.y -= size.y;
+        pos.y -= size.y;
 
-    ImGui::GetBackgroundDrawList()->AddText(apos, ImColor(color), text.c_str());
+    ImGui::GetBackgroundDrawList()->AddText(pos, ImColor(color), text.c_str());
     ImGui::PopFont();
 }
 
@@ -427,30 +496,30 @@ void SampleViewer::draw_pixel_info() const
     if (!m_image)
         return;
 
-    auto font     = m_mono_regular.at(18);
-    auto font_big = m_mono_regular.at(30);
+    constexpr int align     = TextAlign_CENTER | TextAlign_MIDDLE;
+    constexpr int font_size = 30;
+    auto          font      = m_mono_bold.at(font_size);
 
     static const bool m_draw_pixel_info = true;
 
     ImGui::PushFont(font);
-    static const float2 XYRGBA_threshold2 =
-        ImGui::CalcTextSize("x: 00000\ny: 00000\nR: 1.000\nG: 1.000\nB: 1.000\nA: 1.000");
-    static const float2 RGBA_threshold2  = ImGui::CalcTextSize("R: 1.000\nG: 1.000\nB: 1.000\nA: 1.000");
-    static const float  XYRGBA_threshold = 1.5f * maxelem(XYRGBA_threshold2);
-    static const float  RGBA_threshold   = maxelem(RGBA_threshold2);
-    ImGui::PopFont();
-
-    ImGui::PushFont(font_big);
-    static const float2 XYRGBA_threshold_big2 =
-        ImGui::CalcTextSize("x: 00000\ny: 00000\nR: 1.000\nG: 1.000\nB: 1.000\nA: 1.000");
-    static const float XYRGBA_threshold_big = maxelem(XYRGBA_threshold_big2);
+    static float        line_height     = ImGui::CalcTextSize("").y;
+    static const float2 RGBA_threshold2 = float2{ImGui::CalcTextSize("R: 1.000").x, 4.f * line_height};
+    static const float2 XY_threshold2   = RGBA_threshold2 + float2{0.f, 2.f * line_height};
+    static const float  RGBA_threshold  = maxelem(RGBA_threshold2);
+    static const float  XY_threshold    = maxelem(XY_threshold2);
     ImGui::PopFont();
 
     if (!m_draw_pixel_info || m_zoom <= RGBA_threshold)
         return;
 
-    float factor = std::clamp((m_zoom - RGBA_threshold) / (2 * RGBA_threshold), 0.f, 1.f);
+    // fade value for the R,G,B,A values shown at sufficient zoom
+    float factor = std::clamp((m_zoom - RGBA_threshold) / (1.25f * RGBA_threshold), 0.f, 1.f);
     float alpha  = lerp(0.0f, 1.0f, smoothstep(0.0f, 1.0f, factor));
+
+    // fade value for the (x,y) coordinates shown at further zoom
+    float factor2 = std::clamp((m_zoom - XY_threshold) / (1.25f * XY_threshold), 0.f, 1.f);
+    float alpha2  = lerp(0.0f, 1.0f, smoothstep(0.0f, 1.0f, factor2));
 
     if (alpha > 0.0f)
     {
@@ -464,18 +533,28 @@ void SampleViewer::draw_pixel_info() const
         {
             for (int i = minI; i <= maxI; ++i)
             {
-                auto pos = screen_position_at_pixel(float2(i + 0.5f, j + 0.5f));
-                if (m_zoom > XYRGBA_threshold_big)
-                    draw_text(int2{pos},
-                              fmt::format("x:{:>6d}\ny:{:>6d}\nR: 1.000\nG: 1.000\nB: 1.000\nA: 1.000\n", i, j),
-                              float4{float3{0.f}, alpha}, font_big, TextAlign_CENTER | TextAlign_MIDDLE);
-                else if (m_zoom > XYRGBA_threshold)
-                    draw_text(int2{pos},
-                              fmt::format("x:{:>6d}\ny:{:>6d}\nR: 1.000\nG: 1.000\nB: 1.000\nA: 1.000\n", i, j),
-                              float4{float3{0.f}, alpha}, font, TextAlign_CENTER | TextAlign_MIDDLE);
-                else
-                    draw_text(int2{pos}, "R: 1.000\nG: 1.000\nB: 1.000\nA: 1.000", float4{float3{0.f}, alpha}, font,
-                              TextAlign_CENTER | TextAlign_MIDDLE);
+                auto   pos   = screen_position_at_pixel(float2(i + 0.5f, j + 0.5f));
+                float4 pixel = image_pixel({i, j});
+
+                static const vector<string> prefix{"R:", "G:", "B:", "A:"};
+                static constexpr float3x4   cols{
+                      {0.7f, 0.15f, 0.15f}, {0.1f, 0.5f, 0.1f}, {0.2f, 0.2f, 0.9f}, {0.8f, 0.8f, 0.8f}};
+                if (alpha2 > 0.f)
+                {
+                    float2 c_pos = pos + float2{0.f, (-1 - 1.5f) * line_height};
+                    auto   text  = fmt::format("({},{})", i, j);
+                    draw_text(c_pos + int2{1, 2}, text, float4{0.f, 0.f, 0.f, alpha2}, font, align);
+                    draw_text(c_pos, text, float4{cols[3], alpha2}, font, align);
+                }
+
+                for (int c = 0; c < 4; ++c)
+                {
+                    float2 c_pos = pos + float2{0.f, (c - 1.5f) * line_height};
+                    float4 col{cols[c], alpha};
+                    auto   text = fmt::format("{}{:>6.3f}", prefix[c], pixel[c]);
+                    draw_text(c_pos + int2{1, 2}, text, float4{0.f, 0.f, 0.f, alpha}, font, align);
+                    draw_text(c_pos, text, col, font, align);
+                }
             }
         }
     }

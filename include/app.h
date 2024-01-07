@@ -108,18 +108,23 @@ private:
     float zoom_level() const;
     void  set_zoom_level(float l);
 
-    void draw_text(const int2 &pos, const std::string &text, const float4 &col, ImFont *font = nullptr,
-                   int align = TextAlign_RIGHT | TextAlign_BOTTOM) const;
-    void draw_pixel_info() const;
-    void draw_pixel_grid() const;
-    void draw_contents() const;
-    void draw_image_border() const;
-    void process_hotkeys();
+    void   draw_text(float2 pos, const std::string &text, const float4 &col, ImFont *font = nullptr,
+                     int align = TextAlign_RIGHT | TextAlign_BOTTOM) const;
+    void   draw_pixel_info() const;
+    void   draw_pixel_grid() const;
+    void   draw_contents() const;
+    void   draw_image_border() const;
+    void   process_hotkeys();
+    float4 image_pixel(int2 p) const
+    {
+        return (m_image_pixels && m_image) ? m_image_pixels.get()[p.x + p.y * m_image->size().x] : float4{0.f};
+    }
 
     RenderPass *m_render_pass = nullptr;
     Shader     *m_shader      = nullptr;
     Texture    *m_image = nullptr, *m_null_image = nullptr, *m_dither_tex = nullptr;
-    int2        m_image_size{0, 0};
+    using PixelData = std::unique_ptr<float4[], void (*)(void *)>;
+    PixelData m_image_pixels;
 
     float m_exposure = 0.f, m_gamma = 2.2f;
     bool  m_sRGB = false, m_clamp_to_LDR = false, m_dither = true;
