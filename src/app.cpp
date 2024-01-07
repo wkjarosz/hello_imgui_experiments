@@ -35,7 +35,6 @@ using std::string_view;
 
 using namespace linalg::ostream_overloads;
 
-using std::pair;
 using std::to_string;
 
 #ifdef __EMSCRIPTEN__
@@ -121,20 +120,24 @@ SampleViewer::SampleViewer()
 #endif
     }
 
-    m_bg_color                                 = float4{0.3, 0.3, 0.3, 1.0};
-    m_params.imGuiWindowParams.backgroundColor = m_bg_color;
+    m_params.imGuiWindowParams.backgroundColor = float4{0.15f, 0.15f, 0.15f, 1.f};
 
     m_params.callbacks.LoadAdditionalFonts = [this]()
     {
-        std::string roboto_r = "fonts/Roboto/Roboto-Regular.ttf";
-        std::string roboto_b = "fonts/Roboto/Roboto-Bold.ttf";
-        if (!HelloImGui::AssetExists(roboto_r) || !HelloImGui::AssetExists(roboto_b))
+        std::string roboto_r  = "fonts/Roboto/Roboto-Regular.ttf";
+        std::string roboto_b  = "fonts/Roboto/Roboto-Bold.ttf";
+        std::string robotom_r = "fonts/Roboto/RobotoMono-Regular.ttf";
+        std::string robotom_b = "fonts/Roboto/RobotoMono-Bold.ttf";
+        if (!HelloImGui::AssetExists(roboto_r) || !HelloImGui::AssetExists(roboto_b) ||
+            !HelloImGui::AssetExists(robotom_r) || !HelloImGui::AssetExists(robotom_b))
             return;
 
         for (auto font_size : {14, 10, 16, 18, 30})
         {
-            m_regular[font_size] = HelloImGui::LoadFontTTF_WithFontAwesomeIcons(roboto_r, (float)font_size);
-            m_bold[font_size]    = HelloImGui::LoadFontTTF_WithFontAwesomeIcons(roboto_b, (float)font_size);
+            m_sans_regular[font_size] = HelloImGui::LoadFontTTF_WithFontAwesomeIcons(roboto_r, (float)font_size);
+            m_sans_bold[font_size]    = HelloImGui::LoadFontTTF_WithFontAwesomeIcons(roboto_b, (float)font_size);
+            m_mono_regular[font_size] = HelloImGui::LoadFontTTF_WithFontAwesomeIcons(robotom_r, (float)font_size);
+            m_mono_bold[font_size]    = HelloImGui::LoadFontTTF_WithFontAwesomeIcons(robotom_b, (float)font_size);
         }
     };
 
@@ -145,6 +148,7 @@ SampleViewer::SampleViewer()
             m_render_pass = new RenderPass(false, true);
             m_render_pass->set_cull_mode(RenderPass::CullMode::Disabled);
             m_render_pass->set_depth_test(RenderPass::DepthTest::Always, false);
+            m_render_pass->set_clear_color(float4(0.15f, 0.15f, 0.15f, 1.f));
 
             m_shader = new Shader(m_render_pass,
                                   /* An identifying name */
@@ -175,33 +179,7 @@ SampleViewer::SampleViewer()
             m_shader->set_texture("secondary_texture", m_null_image);
             m_shader->set_texture("primary_texture", m_null_image);
 
-            // if (m_image)
-            //     m_shader->set_texture("primary_texture", m_image);
-            // else
-
-            // m_render_pass = new RenderPass(false, true);
-            // m_render_pass->set_cull_mode(RenderPass::CullMode::Disabled);
-            // m_render_pass->set_depth_test(RenderPass::DepthTest::Always, false);
-            // // m_shader =
-            // //     new Shader(m_render_pass, "Test shader", Shader::from_asset("shaders/gradient-shader_vert"),
-            // //                Shader::from_asset("shaders/gradient-shader_frag"), Shader::BlendMode::AlphaBlend);
-            // m_shader     = new Shader(m_render_pass, "Test shader", Shader::from_asset("shaders/image-shader_vert"),
-            //                           Shader::prepend_includes(Shader::from_asset("shaders/image-shader_frag"),
-            //                                                    {"shaders/colorspaces", "shaders/colormaps"}),
-            //                           Shader::BlendMode::AlphaBlend);
-            // m_null_image = new Texture(Texture::PixelFormat::RGBA, Texture::ComponentFormat::Float32, {1, 1},
-            //                            Texture::InterpolationMode::Nearest, Texture::InterpolationMode::Nearest,
-            //                            Texture::WrapMode::Repeat);
-            // static float pixel[] = {0.5f, 0.5f, 0.5f, 1.f};
-            // m_null_image->upload((const uint8_t *)&pixel);
-            // m_shader->set_texture("image", m_null_image);
-
-            // const float positions[] = {-1.f, -1.f, 1.f, -1.f, -1.f, 1.f, 1.f, -1.f, 1.f, 1.f, -1.f, 1.f};
-            // m_shader->set_buffer("position", VariableType::Float32, {6, 2}, positions);
-            // m_shader->set_uniform("primary_pos", float2{0.f});
-            // m_shader->set_uniform("primary_scale", float2{1.f});
-
-            HelloImGui::Log(HelloImGui::LogLevel::Info, "Successfully initialized GL!");
+            HelloImGui::Log(HelloImGui::LogLevel::Info, "Successfully initialized graphics API!");
         }
         catch (const std::exception &e)
         {
@@ -261,16 +239,63 @@ SampleViewer::~SampleViewer()
 {
 }
 
+void SampleViewer::center()
+{
+    m_offset = float2(0.f, 0.f);
+}
+
+void SampleViewer::fit()
+{
+    // Calculate the appropriate scaling factor.
+    m_zoom = minelem(size_f() / m_image->size());
+    center();
+}
+
+float SampleViewer::zoom_level() const
+{
+    return log(m_zoom * pixel_ratio()) / log(m_zoom_sensitivity);
+}
+
+void SampleViewer::set_zoom_level(float level)
+{
+    m_zoom = std::clamp(std::pow(m_zoom_sensitivity, level) / pixel_ratio(), MIN_ZOOM, MAX_ZOOM);
+}
+
 void SampleViewer::zoom_by(float amount, float2 focus_pos)
 {
     if (amount == 0.f)
         return;
 
-    fmt::print("zoom by {}, {}, {}\n", amount, focus_pos.x, focus_pos.y);
     auto  focused_pixel = pixel_at_position(focus_pos);
     float scale_factor  = std::pow(m_zoom_sensitivity, amount);
     m_zoom              = std::clamp(scale_factor * m_zoom, MIN_ZOOM, MAX_ZOOM);
     set_pixel_at_position(focus_pos, focused_pixel);
+}
+
+void SampleViewer::zoom_in()
+{
+    // keep position at center of window fixed while zooming
+    auto center_pos   = float2(size_f() / 2.f);
+    auto center_pixel = pixel_at_position(center_pos);
+
+    // determine next higher power of 2 zoom level
+    float level_for_sensitivity = std::ceil(log(m_zoom) / log(2.f) + 0.5f);
+    float new_scale             = std::pow(2.f, level_for_sensitivity);
+    m_zoom                      = std::clamp(new_scale, MIN_ZOOM, MAX_ZOOM);
+    set_pixel_at_position(center_pos, center_pixel);
+}
+
+void SampleViewer::zoom_out()
+{
+    // keep position at center of window fixed while zooming
+    auto center_pos   = float2(size_f() / 2.f);
+    auto center_pixel = pixel_at_position(center_pos);
+
+    // determine next lower power of 2 zoom level
+    float level_for_sensitivity = std::floor(log(m_zoom) / log(2.f) - 0.5f);
+    float new_scale             = std::pow(2.f, level_for_sensitivity);
+    m_zoom                      = std::clamp(new_scale, MIN_ZOOM, MAX_ZOOM);
+    set_pixel_at_position(center_pos, center_pixel);
 }
 
 float2 SampleViewer::pixel_at_position(float2 position) const
@@ -284,10 +309,11 @@ float2 SampleViewer::position_at_pixel(float2 pixel) const
     return m_zoom * pixel + (m_offset + center_offset());
 }
 
-// float2 SampleViewer::screen_position_at_pixel(float2 pixel) const
-// {
-//     return position_at_pixel(pixel) + position_f();
-// }
+float2 SampleViewer::screen_position_at_pixel(float2 pixel) const
+{
+    // return position_at_pixel(pixel) + position_f();
+    return position_at_pixel(pixel) + float2{0.f};
+}
 
 void SampleViewer::set_pixel_at_position(float2 position, float2 pixel)
 {
@@ -306,34 +332,213 @@ float2 SampleViewer::scaled_image_size_f() const
     return m_zoom * (m_image ? m_image->size() : int2{0.f});
 }
 
+float SampleViewer::pixel_ratio() const
+{
+    return ImGui::GetIO().DisplayFramebufferScale.x;
+}
+
+int2 SampleViewer::size() const
+{
+    return int2{size_f()};
+}
+
 float2 SampleViewer::size_f() const
 {
-    auto &io = ImGui::GetIO();
-    return float2{io.DisplaySize} * float2{io.DisplayFramebufferScale};
+    return float2{ImGui::GetIO().DisplaySize};
 }
 
 float2 SampleViewer::center_offset() const
 {
-    return (size_f() - scaled_image_size_f()) / 2;
+    return (size_f() - scaled_image_size_f()) / 2.f;
 }
 
-void SampleViewer::image_position_and_scale(float2 &position, float2 &scale)
+float2 SampleViewer::image_position() const
 {
-    scale    = scaled_image_size_f() / size_f();
-    position = (m_offset + center_offset()) / size_f();
+    return (m_offset + center_offset()) / size_f();
+}
+
+float2 SampleViewer::image_scale() const
+{
+    return scaled_image_size_f() / size_f();
+}
+
+void SampleViewer::draw_text(const int2 &pos, const string &text, const float4 &color, ImFont *font, int align) const
+{
+    ImGui::PushFont(font);
+    float2 apos{pos};
+    float2 size = ImGui::CalcTextSize(text.c_str());
+
+    if (align & TextAlign_LEFT)
+        apos.x = pos.x;
+    else if (align & TextAlign_CENTER)
+        apos.x -= 0.5f * size.x;
+    else if (align & TextAlign_RIGHT)
+        apos.x -= size.x;
+
+    if (align & TextAlign_TOP)
+        apos.y = pos.y;
+    else if (align & TextAlign_MIDDLE)
+        apos.y -= 0.5f * size.y;
+    else if (align & TextAlign_BOTTOM)
+        apos.y -= size.y;
+
+    ImGui::GetBackgroundDrawList()->AddText(apos, ImColor(color), text.c_str());
+    ImGui::PopFont();
+}
+
+void SampleViewer::draw_pixel_grid() const
+{
+    if (!m_image)
+        return;
+
+    static const bool m_draw_grid      = true;
+    static const int  m_grid_threshold = 10;
+
+    if (!m_draw_grid || (m_grid_threshold == -1) || (m_zoom <= m_grid_threshold))
+        return;
+
+    float factor = std::clamp((m_zoom - m_grid_threshold) / (2 * m_grid_threshold), 0.f, 1.f);
+    float alpha  = lerp(0.0f, 0.2f, smoothstep(0.0f, 1.0f, factor));
+
+    if (alpha > 0.0f)
+    {
+        ImColor col(1.0f, 1.0f, 1.0f, alpha);
+
+        float2 xy0  = screen_position_at_pixel(float2(0.0f));
+        int    minJ = std::max(0, int(-xy0.y / m_zoom));
+        int    maxJ = std::min(m_image->size().y - 1, int(ceil((size().y - xy0.y) / m_zoom)));
+        int    minI = std::max(0, int(-xy0.x / m_zoom));
+        int    maxI = std::min(m_image->size().x - 1, int(ceil((size().x - xy0.x) / m_zoom)));
+
+        // draw vertical lines
+        for (int i = minI; i <= maxI; ++i)
+            ImGui::GetBackgroundDrawList()->AddLine(screen_position_at_pixel(float2(i, minJ)),
+                                                    screen_position_at_pixel(float2(i, maxJ)), col, 2.f);
+
+        // draw horizontal lines
+        for (int j = minJ; j <= maxJ; ++j)
+            ImGui::GetBackgroundDrawList()->AddLine(screen_position_at_pixel(float2(minI, j)),
+                                                    screen_position_at_pixel(float2(maxI, j)), col, 2.f);
+    }
+}
+
+void SampleViewer::draw_pixel_info() const
+{
+    if (!m_image)
+        return;
+
+    auto font     = m_mono_regular.at(18);
+    auto font_big = m_mono_regular.at(30);
+
+    static const bool m_draw_pixel_info = true;
+
+    ImGui::PushFont(font);
+    static const float2 XYRGBA_threshold2 =
+        ImGui::CalcTextSize("x: 00000\ny: 00000\nR: 1.000\nG: 1.000\nB: 1.000\nA: 1.000");
+    static const float2 RGBA_threshold2  = ImGui::CalcTextSize("R: 1.000\nG: 1.000\nB: 1.000\nA: 1.000");
+    static const float  XYRGBA_threshold = 1.5f * maxelem(XYRGBA_threshold2);
+    static const float  RGBA_threshold   = maxelem(RGBA_threshold2);
+    ImGui::PopFont();
+
+    ImGui::PushFont(font_big);
+    static const float2 XYRGBA_threshold_big2 =
+        ImGui::CalcTextSize("x: 00000\ny: 00000\nR: 1.000\nG: 1.000\nB: 1.000\nA: 1.000");
+    static const float XYRGBA_threshold_big = maxelem(XYRGBA_threshold_big2);
+    ImGui::PopFont();
+
+    if (!m_draw_pixel_info || m_zoom <= RGBA_threshold)
+        return;
+
+    float factor = std::clamp((m_zoom - RGBA_threshold) / (2 * RGBA_threshold), 0.f, 1.f);
+    float alpha  = lerp(0.0f, 1.0f, smoothstep(0.0f, 1.0f, factor));
+
+    if (alpha > 0.0f)
+    {
+        float2 xy0  = screen_position_at_pixel(float2(0.0f));
+        int    minJ = std::max(0, int(-xy0.y / m_zoom));
+        int    maxJ = std::min(m_image->size().y - 1, int(ceil((size().y - xy0.y) / m_zoom)));
+        int    minI = std::max(0, int(-xy0.x / m_zoom));
+        int    maxI = std::min(m_image->size().x - 1, int(ceil((size().x - xy0.x) / m_zoom)));
+
+        for (int j = minJ; j <= maxJ; ++j)
+        {
+            for (int i = minI; i <= maxI; ++i)
+            {
+                auto pos = screen_position_at_pixel(float2(i + 0.5f, j + 0.5f));
+                if (m_zoom > XYRGBA_threshold_big)
+                    draw_text(int2{pos},
+                              fmt::format("x:{:>6d}\ny:{:>6d}\nR: 1.000\nG: 1.000\nB: 1.000\nA: 1.000\n", i, j),
+                              float4{float3{0.f}, alpha}, font_big, TextAlign_CENTER | TextAlign_MIDDLE);
+                else if (m_zoom > XYRGBA_threshold)
+                    draw_text(int2{pos},
+                              fmt::format("x:{:>6d}\ny:{:>6d}\nR: 1.000\nG: 1.000\nB: 1.000\nA: 1.000\n", i, j),
+                              float4{float3{0.f}, alpha}, font, TextAlign_CENTER | TextAlign_MIDDLE);
+                else
+                    draw_text(int2{pos}, "R: 1.000\nG: 1.000\nB: 1.000\nA: 1.000", float4{float3{0.f}, alpha}, font,
+                              TextAlign_CENTER | TextAlign_MIDDLE);
+            }
+        }
+    }
+}
+
+void SampleViewer::draw_image_border() const
+{
+    if (!m_image || minelem(m_image->size()) == 0)
+        return;
+
+    ImGui::GetBackgroundDrawList()->AddRect(screen_position_at_pixel(float2(0.0f)),
+                                            screen_position_at_pixel(float2{m_image->size()}),
+                                            ImColor{0.5f, 0.5f, 0.5f, 1.0f}, 0.f, ImDrawFlags_None, 2.f);
+}
+
+void SampleViewer::draw_contents() const
+{
+    if (m_image && size().x > 0 && size().y > 0)
+    {
+        float2 randomness(std::generate_canonical<float, 10>(g_rand) * 255,
+                          std::generate_canonical<float, 10>(g_rand) * 255);
+
+        m_shader->set_uniform("randomness", randomness);
+        m_shader->set_uniform("gain", powf(2.0f, m_exposure));
+        m_shader->set_uniform("gamma", m_gamma);
+        m_shader->set_uniform("sRGB", m_sRGB);
+        m_shader->set_uniform("clamp_to_LDR", m_clamp_to_LDR);
+        m_shader->set_uniform("do_dither", m_dither);
+
+        m_shader->set_uniform("primary_pos", image_position());
+        m_shader->set_uniform("primary_scale", image_scale());
+
+        m_shader->set_uniform("blend_mode", 0); //(int)m_blend_mode);
+        m_shader->set_uniform("channel", 0);    //(int)m_channel);
+        m_shader->set_uniform("bg_mode", 2);    //(int)m_bg_mode);
+        m_shader->set_uniform("bg_color", m_bg_color);
+
+        // if (m_reference_image)
+        // {
+        //     float2 ref_pos, ref_scale;
+        //     image_position_and_scale(ref_pos, ref_scale, m_reference_image);
+        //     m_shader->set_uniform("has_reference", true);
+        //     m_shader->set_uniform("secondary_pos", ref_pos);
+        //     m_shader->set_uniform("secondary_scale", ref_scale);
+        // }
+        // else
+        {
+            m_shader->set_uniform("has_reference", false);
+            m_shader->set_uniform("secondary_pos", float2(1.f, 1.f));
+            m_shader->set_uniform("secondary_scale", float2(1.f, 1.f));
+        }
+
+        m_shader->begin();
+        m_shader->draw_array(Shader::PrimitiveType::Triangle, 0, 6, false);
+        m_shader->end();
+    }
 }
 
 void SampleViewer::draw_background()
 {
     auto &io = ImGui::GetIO();
 
-    if (!ImGui::GetIO().WantCaptureKeyboard)
-    {
-        if (ImGui::IsKeyPressed(ImGuiKey_E))
-            m_exposure += ImGui::IsKeyDown(ImGuiMod_Shift) ? 0.25f : -0.25f;
-        else if (ImGui::IsKeyPressed(ImGuiKey_G))
-            m_gamma = std::max(0.02f, m_gamma + (ImGui::IsKeyDown(ImGuiMod_Shift) ? 0.02f : -0.02f));
-    }
+    process_hotkeys();
 
     try
     {
@@ -355,16 +560,14 @@ void SampleViewer::draw_background()
 
         if (!io.WantCaptureMouse)
         {
-            auto p      = float2{io.MousePos} * float2{io.DisplayFramebufferScale};
-            auto scroll = float2{io.MouseWheelH, io.MouseWheel} * float2{io.DisplayFramebufferScale};
+            auto p      = float2{io.MousePos};
+            auto scroll = float2{io.MouseWheelH, io.MouseWheel};
 #if defined(__EMSCRIPTEN__)
             scroll *= 10.0f;
 #endif
-
             if (ImGui::IsMouseDragging(ImGuiMouseButton_Left))
             {
-                set_pixel_at_position(p + float2{ImGui::GetMouseDragDelta(ImGuiMouseButton_Left)} *
-                                              float2{io.DisplayFramebufferScale},
+                set_pixel_at_position(p + float2{ImGui::GetMouseDragDelta(ImGuiMouseButton_Left)},
                                       pixel_at_position(p));
                 ImGui::ResetMouseDragDelta();
             }
@@ -379,59 +582,15 @@ void SampleViewer::draw_background()
         // clear the framebuffer and set up the viewport
         //
 
-        m_bg_color = float4{1.0, 1.5, 1.5, 1.0};
-        // m_params.imGuiWindowParams.backgroundColor = m_bg_color;
         m_render_pass->resize(fbsize);
-        // m_render_pass->set_viewport((viewport_offset)*fbscale, (viewport_size)*fbscale);
-        m_render_pass->set_viewport({0, 0}, fbsize);
-        // m_render_pass->set_clear_color(float4{fmod(frame++ / 100.f, 1.f), 0.2, 0.1, 1.0});
-        m_render_pass->set_clear_color(m_bg_color);
+        m_render_pass->set_viewport({0, 0}, fbsize); //((viewport_offset)*fbscale, (viewport_size)*fbscale);
 
         m_render_pass->begin();
 
-        float2 randomness(std::generate_canonical<float, 10>(g_rand) * 255,
-                          std::generate_canonical<float, 10>(g_rand) * 255);
-
-        m_shader->set_uniform("randomness", randomness);
-        m_shader->set_uniform("gain", powf(2.0f, m_exposure));
-        m_shader->set_uniform("gamma", m_gamma);
-        m_shader->set_uniform("sRGB", m_sRGB);
-        m_shader->set_uniform("clamp_to_LDR", m_clamp_to_LDR);
-        m_shader->set_uniform("do_dither", m_dither);
-
-        float2 curr_pos, curr_scale;
-        image_position_and_scale(curr_pos, curr_scale);
-        m_shader->set_uniform("primary_pos", curr_pos);
-        m_shader->set_uniform("primary_scale", curr_scale);
-
-        m_shader->set_uniform("blend_mode", 0);
-        m_shader->set_uniform("channel", 0);
-        m_shader->set_uniform("bg_mode", 2);
-        m_shader->set_uniform("bg_color", m_bg_color);
-
-        // if (m_reference_image)
-        // {
-        //     float2 ref_pos, ref_scale;
-        //     image_position_and_scale(ref_pos, ref_scale, m_reference_image);
-        //     m_shader->set_uniform("has_reference", true);
-        //     m_shader->set_uniform("secondary_pos", ref_pos);
-        //     m_shader->set_uniform("secondary_scale", ref_scale);
-        // }
-        // else
-        {
-            m_shader->set_uniform("has_reference", false);
-            m_shader->set_uniform("secondary_pos", float2(1.f, 1.f));
-            m_shader->set_uniform("secondary_scale", float2(1.f, 1.f));
-        }
-        // m_shader->set_texture("secondary_texture", m_null_image);
-        // if (m_image)
-        //     m_shader->set_texture("primary_texture", m_image);
-        // else
-        //     m_shader->set_texture("primary_texture", m_null_image);
-
-        m_shader->begin();
-        m_shader->draw_array(Shader::PrimitiveType::Triangle, 0, 6, false);
-        m_shader->end();
+        draw_contents();
+        draw_pixel_info();
+        draw_pixel_grid();
+        draw_image_border();
 
         m_render_pass->end();
     }
@@ -440,6 +599,28 @@ void SampleViewer::draw_background()
         fmt::print(stderr, "Drawing failed:\n\t{}.", e.what());
         HelloImGui::Log(HelloImGui::LogLevel::Error, "Drawing failed:\n\t%s.", e.what());
     }
+}
+
+void SampleViewer::process_hotkeys()
+{
+    if (ImGui::GetIO().WantCaptureKeyboard)
+        return;
+
+    if (!m_image)
+        return;
+
+    if (ImGui::IsKeyPressed(ImGuiKey_Minus) || ImGui::IsKeyPressed(ImGuiKey_KeypadSubtract))
+        zoom_out();
+    else if (ImGui::IsKeyPressed(ImGuiKey_Equal) || ImGui::IsKeyPressed(ImGuiKey_KeypadAdd))
+        zoom_in();
+    else if (ImGui::IsKeyPressed(ImGuiKey_E))
+        m_exposure += ImGui::IsKeyDown(ImGuiMod_Shift) ? 0.25f : -0.25f;
+    else if (ImGui::IsKeyPressed(ImGuiKey_G))
+        m_gamma = std::max(0.02f, m_gamma + (ImGui::IsKeyDown(ImGuiMod_Shift) ? 0.02f : -0.02f));
+    else if (ImGui::IsKeyPressed(ImGuiKey_F))
+        fit();
+    else if (ImGui::IsKeyPressed(ImGuiKey_C))
+        center();
 }
 
 int main(int argc, char **argv)
