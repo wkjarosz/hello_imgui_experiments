@@ -79,7 +79,7 @@ SampleViewer::SampleViewer() : m_image_pixels(nullptr, stbi_image_free)
     m_params.imGuiWindowParams.showMenuBar            = true;
     m_params.imGuiWindowParams.showStatusBar          = true;
     m_params.imGuiWindowParams.defaultImGuiWindowType = HelloImGui::DefaultImGuiWindowType::ProvideFullScreenDockSpace;
-    m_params.imGuiWindowParams.fullScreenWindow_MarginTopLeft = ImVec2(0.f, 2.5f);
+    m_params.imGuiWindowParams.backgroundColor        = float4{0.15f, 0.15f, 0.15f, 1.f};
 
     // Setting this to true allows multiple viewports where you can drag windows outside out the main window in order to
     // put their content into new native windows m_params.imGuiWindowParams.enableViewports = true;
@@ -117,29 +117,6 @@ SampleViewer::SampleViewer() : m_image_pixels(nullptr, stbi_image_free)
             HelloImGui::DockingSplit{"MainDockSpace", "ConsoleSpace", ImGuiDir_Down, 0.25f}};
     }
 
-    m_params.imGuiWindowParams.backgroundColor = float4{0.15f, 0.15f, 0.15f, 1.f};
-
-    m_params.callbacks.LoadAdditionalFonts = [this]()
-    {
-        std::string sans_r = "fonts/Roboto/Roboto-Regular.ttf";
-        std::string sans_b = "fonts/Roboto/Roboto-Bold.ttf";
-        // std::string mono_r = "fonts/Roboto/RobotoMono-Regular.ttf";
-        // std::string mono_b = "fonts/Roboto/RobotoMono-Bold.ttf";
-        std::string mono_r = "fonts/Inconsolata-Regular.ttf";
-        std::string mono_b = "fonts/Inconsolata-Bold.ttf";
-        if (!HelloImGui::AssetExists(sans_r) || !HelloImGui::AssetExists(sans_b) || !HelloImGui::AssetExists(mono_r) ||
-            !HelloImGui::AssetExists(mono_b))
-            return;
-
-        for (auto font_size : {14, 10, 16, 18, 30})
-        {
-            m_sans_regular[font_size] = HelloImGui::LoadFontTTF_WithFontAwesomeIcons(sans_r, (float)font_size);
-            m_sans_bold[font_size]    = HelloImGui::LoadFontTTF_WithFontAwesomeIcons(sans_b, (float)font_size);
-            m_mono_regular[font_size] = HelloImGui::LoadFontTTF(mono_r, (float)font_size);
-            m_mono_bold[font_size]    = HelloImGui::LoadFontTTF(mono_b, (float)font_size);
-        }
-    };
-
     m_params.callbacks.ShowStatus = [this]()
     {
         if (m_image && m_image_pixels)
@@ -176,10 +153,43 @@ SampleViewer::SampleViewer() : m_image_pixels(nullptr, stbi_image_free)
         }
     };
 
+    //
+    // Toolbars
+    //
+    HelloImGui::EdgeToolbarOptions edgeToolbarOptions;
+    edgeToolbarOptions.sizeEm          = 2.2f;
+    edgeToolbarOptions.WindowPaddingEm = ImVec2(0.7f, 0.35f);
+    m_params.callbacks.AddEdgeToolbar(
+        HelloImGui::EdgeToolbarType::Top, [this]() { draw_top_toolbar(); }, edgeToolbarOptions);
+
+    m_params.callbacks.LoadAdditionalFonts = [this]()
+    {
+        std::string sans_r = "fonts/Roboto/Roboto-Regular.ttf";
+        std::string sans_b = "fonts/Roboto/Roboto-Bold.ttf";
+        // std::string mono_r = "fonts/Roboto/RobotoMono-Regular.ttf";
+        // std::string mono_b = "fonts/Roboto/RobotoMono-Bold.ttf";
+        std::string mono_r = "fonts/Inconsolata-Regular.ttf";
+        std::string mono_b = "fonts/Inconsolata-Bold.ttf";
+        if (!HelloImGui::AssetExists(sans_r) || !HelloImGui::AssetExists(sans_b) || !HelloImGui::AssetExists(mono_r) ||
+            !HelloImGui::AssetExists(mono_b))
+            return;
+
+        for (auto font_size : {14, 10, 16, 18, 30})
+        {
+            m_sans_regular[font_size] = HelloImGui::LoadFontTTF_WithFontAwesomeIcons(sans_r, (float)font_size);
+            m_sans_bold[font_size]    = HelloImGui::LoadFontTTF_WithFontAwesomeIcons(sans_b, (float)font_size);
+            m_mono_regular[font_size] = HelloImGui::LoadFontTTF(mono_r, (float)font_size);
+            m_mono_bold[font_size]    = HelloImGui::LoadFontTTF(mono_b, (float)font_size);
+        }
+    };
+
     m_params.callbacks.SetupImGuiStyle = [this]()
     {
         try
         {
+            ImVec4 *colors             = ImGui::GetStyle().Colors;
+            colors[ImGuiCol_MenuBarBg] = ImVec4(0.08f, 0.09f, 0.09f, 1.00f);
+
             m_render_pass = new RenderPass(false, true);
             m_render_pass->set_cull_mode(RenderPass::CullMode::Disabled);
             m_render_pass->set_depth_test(RenderPass::DepthTest::Always, false);
@@ -222,8 +232,6 @@ SampleViewer::SampleViewer() : m_image_pixels(nullptr, stbi_image_free)
             HelloImGui::Log(HelloImGui::LogLevel::Error, "Shader initialization failed!:\n\t%s.", e.what());
         }
     };
-
-    m_params.callbacks.ShowGui = [this]() { draw_gui(); };
 
     //
     // Load user settings at `PostInit` and save them at `BeforeExit`
@@ -719,60 +727,44 @@ void SampleViewer::draw_contents() const
         m_shader->end();
     }
 }
-void SampleViewer::draw_gui()
+void SampleViewer::draw_top_toolbar()
 {
-    ImGuiViewport *viewport = ImGui::GetMainViewport();
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("EV:");
+    ImGui::SameLine();
+    ImGui::PushItemWidth(HelloImGui::EmSize(8));
 
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings;
+    ImGui::SliderFloat("##ExposureSlider", &m_exposure, -9.f, 9.f, "%5.2f");
+    ImGui::SameLine();
 
-    // ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, HelloImGui::EmSize(2.5)));
-    // ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, HelloImGui::EmSize(2.5)));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.00f, 8.00f));
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5.00f, 3.00f));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.00f, 6.00f));
+    ImGui::Button(ICON_FA_MAGIC "##NormalizeExposure");
+    ImGui::SameLine();
 
-    if (ImGui::BeginViewportSideBar("##Toolbar", viewport, ImGuiDir_Up, HelloImGui::EmSize(2.5f) + 1, flags))
+    if (ImGui::Button(ICON_FA_UNDO "##ResetTonemapping"))
     {
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("EV:");
-        ImGui::SameLine();
-        ImGui::PushItemWidth(HelloImGui::EmSize(8));
-
-        ImGui::SliderFloat("##ExposureSlider", &m_exposure, -9.f, 9.f, "%5.2f");
-        ImGui::SameLine();
-
-        ImGui::Button(ICON_FA_MAGIC "##NormalizeExposure");
-        ImGui::SameLine();
-
-        if (ImGui::Button(ICON_FA_UNDO "##ResetTonemapping"))
-        {
-            m_exposure = 0.f;
-            m_gamma    = 2.2f;
-            m_sRGB     = true;
-        }
-        ImGui::SameLine();
-
-        ImGui::Checkbox("sRGB", &m_sRGB);
-        ImGui::SameLine();
-
-        ImGui::BeginDisabled(m_sRGB);
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("Gamma:");
-        ImGui::SameLine();
-        ImGui::PushItemWidth(HelloImGui::EmSize(8));
-        ImGui::SliderFloat("##GammaSlider", &m_gamma, 0.02f, 9.f, "%5.3f");
-        ImGui::EndDisabled();
-        ImGui::SameLine();
-
-        ImGui::Checkbox("Grid", &m_draw_grid);
-        ImGui::SameLine();
-
-        ImGui::Checkbox("RGB values", &m_draw_pixel_info);
-        ImGui::SameLine();
-
-        ImGui::End();
+        m_exposure = 0.f;
+        m_gamma    = 2.2f;
+        m_sRGB     = true;
     }
-    ImGui::PopStyleVar(3);
+    ImGui::SameLine();
+
+    ImGui::Checkbox("sRGB", &m_sRGB);
+    ImGui::SameLine();
+
+    ImGui::BeginDisabled(m_sRGB);
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Gamma:");
+    ImGui::SameLine();
+    ImGui::PushItemWidth(HelloImGui::EmSize(8));
+    ImGui::SliderFloat("##GammaSlider", &m_gamma, 0.02f, 9.f, "%5.3f");
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+
+    ImGui::Checkbox("Grid", &m_draw_grid);
+    ImGui::SameLine();
+
+    ImGui::Checkbox("RGB values", &m_draw_pixel_info);
+    ImGui::SameLine();
 }
 
 void SampleViewer::draw_background()

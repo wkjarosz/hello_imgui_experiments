@@ -220,7 +220,7 @@ foreach(MY_RESOURCE_FILE ${MY_RESOURCE_FILES})
   )
 endforeach()
 
-CPMAddPackage("gh:pthom/hello_imgui#47b06b22ab06d3a62fd966e8446a16a2c75691cd")
+CPMAddPackage("gh:pthom/hello_imgui#2441db6cd5ff99c9d055778a5091679c8b834bf4")
 if(hello_imgui_ADDED)
   message(STATUS "hello_imgui library added")
 endif()
