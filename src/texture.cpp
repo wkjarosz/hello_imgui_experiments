@@ -6,7 +6,7 @@
 #include "stb_image.h"
 #undef STB_IMAGE_IMPLEMENTATION
 
-Texture::Texture(PixelFormat pixel_format, ComponentFormat component_format, const int2 &size,
+Texture::Texture(PixelFormat pixel_format, ComponentFormat component_format, int2 size,
                  InterpolationMode min_interpolation_mode, InterpolationMode mag_interpolation_mode, WrapMode wrap_mode,
                  uint8_t samples, uint8_t flags, bool manual_mipmapping) :
     m_pixel_format(pixel_format),

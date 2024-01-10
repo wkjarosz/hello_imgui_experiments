@@ -18,7 +18,9 @@
 #include <cmath>
 #include <fmt/core.h>
 #include <fstream>
+#include <memory>
 #include <random>
+#include <sstream>
 #include <utility>
 
 #ifdef __EMSCRIPTEN__
@@ -38,6 +40,7 @@ using std::string_view;
 using namespace linalg::ostream_overloads;
 
 using std::to_string;
+using std::unique_ptr;
 
 #ifdef __EMSCRIPTEN__
 EM_JS(int, screen_width, (), { return screen.width; });
@@ -46,9 +49,21 @@ EM_JS(int, window_width, (), { return window.innerWidth; });
 EM_JS(int, window_height, (), { return window.innerHeight; });
 #endif
 
-static std::mt19937 g_rand(53);
-static const float  MIN_ZOOM = 0.01f;
-static const float  MAX_ZOOM = 512.f;
+static std::mt19937     g_rand(53);
+static constexpr float  MIN_ZOOM     = 0.01f;
+static constexpr float  MAX_ZOOM     = 512.f;
+static constexpr size_t g_max_recent = 15;
+
+static void load_texture(const PixelData &pixels, int2 image_size, unique_ptr<Texture> &image, Shader *shader)
+{
+    image = std::make_unique<Texture>(Texture::PixelFormat::RGBA, Texture::ComponentFormat::Float32, image_size,
+                                      Texture::InterpolationMode::Trilinear, Texture::InterpolationMode::Nearest,
+                                      Texture::WrapMode::ClampToEdge, 1, Texture::TextureFlags::ShaderRead);
+    if (image->pixel_format() != Texture::PixelFormat::RGBA)
+        throw std::runtime_error("Pixel format not supported by the hardware!");
+    image->upload((const uint8_t *)pixels.get());
+    shader->set_texture("primary_texture", image.get());
+}
 
 SampleViewer::SampleViewer() : m_image_pixels(nullptr, stbi_image_free)
 {
@@ -64,6 +79,7 @@ SampleViewer::SampleViewer() : m_image_pixels(nullptr, stbi_image_free)
     m_params.imGuiWindowParams.showMenuBar            = true;
     m_params.imGuiWindowParams.showStatusBar          = true;
     m_params.imGuiWindowParams.defaultImGuiWindowType = HelloImGui::DefaultImGuiWindowType::ProvideFullScreenDockSpace;
+    m_params.imGuiWindowParams.fullScreenWindow_MarginTopLeft = ImVec2(0.f, 2.5f);
 
     // Setting this to true allows multiple viewports where you can drag windows outside out the main window in order to
     // put their content into new native windows m_params.imGuiWindowParams.enableViewports = true;
@@ -73,56 +89,32 @@ SampleViewer::SampleViewer() : m_image_pixels(nullptr, stbi_image_free)
     m_params.iniFolderType = HelloImGui::IniFolderType::AppUserConfigFolder;
     m_params.iniFilename   = "HelloGuiExperiments/settings.ini";
 
-    // A console window named "Console" will be placed in "ConsoleSpace". It uses the HelloImGui logger gui
-    HelloImGui::DockableWindow consoleWindow;
-    consoleWindow.label             = "Console";
-    consoleWindow.dockSpaceName     = "ConsoleSpace";
-    consoleWindow.isVisible         = false;
-    consoleWindow.rememberIsVisible = true;
-    consoleWindow.GuiFunction       = [] { HelloImGui::LogGui(); };
-
-    // docking layouts
+    //
+    // Dockable windows
     {
-        m_params.dockingParams.layoutName      = "Settings on left";
-        m_params.dockingParams.dockableWindows = {consoleWindow};
+        // the file dialog
+        HelloImGui::DockableWindow file_window;
+        file_window.label             = "File";
+        file_window.dockSpaceName     = "SideSpace";
+        file_window.isVisible         = true;
+        file_window.rememberIsVisible = true;
+        file_window.GuiFunction       = [this] { draw_file_window(); };
 
-        HelloImGui::DockingSplit splitMainConsole{"MainDockSpace", "ConsoleSpace", ImGuiDir_Down, 0.25f};
+        // A console window named "Console" will be placed in "ConsoleSpace". It uses the HelloImGui logger gui
+        HelloImGui::DockableWindow console_window;
+        console_window.label             = "Console";
+        console_window.dockSpaceName     = "ConsoleSpace";
+        console_window.isVisible         = false;
+        console_window.rememberIsVisible = true;
+        console_window.GuiFunction       = [] { HelloImGui::LogGui(); };
 
-        m_params.dockingParams.dockingSplits = {
-            HelloImGui::DockingSplit{"MainDockSpace", "EditorSpace", ImGuiDir_Left, 0.2f}, splitMainConsole};
-
-        HelloImGui::DockingParams right_layout, portrait_layout, landscape_layout;
-
-        right_layout.layoutName      = "Settings on right";
-        right_layout.dockableWindows = {consoleWindow};
-        right_layout.dockingSplits   = {HelloImGui::DockingSplit{"MainDockSpace", "EditorSpace", ImGuiDir_Right, 0.2f},
-                                        splitMainConsole};
-
-        consoleWindow.dockSpaceName = "EditorSpace";
-
-        portrait_layout.layoutName      = "Mobile device (portrait orientation)";
-        portrait_layout.dockableWindows = {consoleWindow};
-        portrait_layout.dockingSplits = {HelloImGui::DockingSplit{"MainDockSpace", "EditorSpace", ImGuiDir_Down, 0.5f}};
-
-        landscape_layout.layoutName      = "Mobile device (landscape orientation)";
-        landscape_layout.dockableWindows = {consoleWindow};
-        landscape_layout.dockingSplits   = {
-            HelloImGui::DockingSplit{"MainDockSpace", "EditorSpace", ImGuiDir_Left, 0.5f}};
-
-        m_params.alternativeDockingLayouts = {right_layout, portrait_layout, landscape_layout};
-
-#ifdef __EMSCRIPTEN__
-        HelloImGui::Log(HelloImGui::LogLevel::Info, "Screen size: %d, %d\nWindow size: %d, %d", screen_width(),
-                        screen_height(), window_width(), window_height());
-        if (std::min(screen_width(), screen_height()) < 500)
-        {
-            HelloImGui::Log(
-                HelloImGui::LogLevel::Info, "Switching to %s layout",
-                m_params.alternativeDockingLayouts[window_width() < window_height() ? 1 : 2].layoutName.c_str());
-            std::swap(m_params.dockingParams,
-                      m_params.alternativeDockingLayouts[window_width() < window_height() ? 1 : 2]);
-        }
-#endif
+        // docking layouts
+        m_params.dockingParams.layoutName      = "Standard";
+        m_params.dockingParams.dockableWindows = {file_window, console_window};
+        m_params.dockingParams.dockingSplits   = {
+            // HelloImGui::DockingSplit{"MainDockSpace", "ToolbarSpace", ImGuiDir_Up, 0.1f},
+            HelloImGui::DockingSplit{"MainDockSpace", "SideSpace", ImGuiDir_Left, 0.2f},
+            HelloImGui::DockingSplit{"MainDockSpace", "ConsoleSpace", ImGuiDir_Down, 0.25f}};
     }
 
     m_params.imGuiWindowParams.backgroundColor = float4{0.15f, 0.15f, 0.15f, 1.f};
@@ -205,22 +197,22 @@ SampleViewer::SampleViewer() : m_image_pixels(nullptr, stbi_image_free)
             m_shader->set_buffer("position", VariableType::Float32, {6, 2}, positions);
             m_render_pass->set_cull_mode(RenderPass::CullMode::Disabled);
 
-            m_dither_tex = new Texture(Texture::PixelFormat::R, Texture::ComponentFormat::Float32, {256, 256},
-                                       Texture::InterpolationMode::Nearest, Texture::InterpolationMode::Nearest,
-                                       Texture::WrapMode::Repeat);
+            m_dither_tex = std::make_unique<Texture>(Texture::PixelFormat::R, Texture::ComponentFormat::Float32,
+                                                     int2{256, 256}, Texture::InterpolationMode::Nearest,
+                                                     Texture::InterpolationMode::Nearest, Texture::WrapMode::Repeat);
             m_dither_tex->upload((const uint8_t *)dither_matrix256);
-            m_shader->set_texture("dither_texture", m_dither_tex);
+            m_shader->set_texture("dither_texture", m_dither_tex.get());
 
             // create an empty texture so that the shader doesn't print errors
             // before we've selected a reference image
             // FIXME: at some point, find a more elegant solution for this.
-            m_null_image = new Texture(Texture::PixelFormat::RGBA, Texture::ComponentFormat::Float32, {1, 1},
-                                       Texture::InterpolationMode::Nearest, Texture::InterpolationMode::Nearest,
-                                       Texture::WrapMode::Repeat);
+            m_null_image = std::make_unique<Texture>(Texture::PixelFormat::RGBA, Texture::ComponentFormat::Float32,
+                                                     int2{1, 1}, Texture::InterpolationMode::Nearest,
+                                                     Texture::InterpolationMode::Nearest, Texture::WrapMode::Repeat);
             static const float4 null_tex{1.f, 1.f, 1.f, 1.f};
             m_null_image->upload((const uint8_t *)&null_tex);
-            m_shader->set_texture("secondary_texture", m_null_image);
-            m_shader->set_texture("primary_texture", m_null_image);
+            m_shader->set_texture("secondary_texture", m_null_image.get());
+            m_shader->set_texture("primary_texture", m_null_image.get());
 
             HelloImGui::Log(HelloImGui::LogLevel::Info, "Successfully initialized graphics API!");
         }
@@ -231,70 +223,130 @@ SampleViewer::SampleViewer() : m_image_pixels(nullptr, stbi_image_free)
         }
     };
 
-    // m_params.callbacks.PostInit = [this]() {
+    m_params.callbacks.ShowGui = [this]() { draw_gui(); };
 
-    // };
+    //
+    // Load user settings at `PostInit` and save them at `BeforeExit`
+    //
+    m_params.callbacks.PostInit = [this]
+    {
+        auto               s = HelloImGui::LoadUserPref("Recent files");
+        std::istringstream ss(s);
+
+        int         i = 0;
+        std::string line;
+        m_recent_files.clear();
+        while (std::getline(ss, line))
+        {
+            if (line.empty())
+                continue;
+
+            string prefix = fmt::format("File{}=", i);
+            // check that the line starts with the prefix
+            if (line.size() >= prefix.size() && std::equal(prefix.begin(), prefix.end(), line.begin()))
+                m_recent_files.push_back(line.substr(prefix.size()));
+
+            i++;
+        }
+    };
+
+    m_params.callbacks.BeforeExit = [this]
+    {
+        std::stringstream ss;
+        for (size_t i = 0; i < m_recent_files.size(); ++i)
+        {
+            ss << "File" << i << "=" << m_recent_files[i];
+            if (i < m_recent_files.size() - 1)
+                ss << std::endl;
+        }
+        HelloImGui::SaveUserPref("Recent files", ss.str());
+    };
 
     m_params.callbacks.ShowAppMenuItems = [this]()
     {
+#if defined(__EMSCRIPTEN__)
         if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN " Open image..."))
         {
-#ifndef __EMSCRIPTEN__
-            auto result = pfd::open_file("Open image", "", {"Image files", "*.png *.hdr *.jpeg *.jpg *.bmp"}).result();
-            if (!result.empty())
-            {
-                HelloImGui::Log(HelloImGui::LogLevel::Debug, "Loading file '%s'...", result.front().c_str());
-                delete m_image;
-                // m_image         = new Texture(result.front(), Texture::InterpolationMode::Trilinear,
-                //                               Texture::InterpolationMode::Nearest, Texture::WrapMode::ClampToEdge);
-                string filename = result.front();
-                int2   image_size;
-                m_image_pixels = PixelData{
-                    (float4 *)stbi_loadf(filename.c_str(), &image_size.x, &image_size.y, nullptr, 4), stbi_image_free};
-                if (!m_image_pixels)
-                    throw std::runtime_error("Could not load texture data from file \"" + filename +
-                                             "\". Reason: " + stbi_failure_reason());
-                m_image = new Texture(Texture::PixelFormat::RGBA, Texture::ComponentFormat::Float32, image_size,
-                                      Texture::InterpolationMode::Trilinear, Texture::InterpolationMode::Nearest,
-                                      Texture::WrapMode::ClampToEdge, 1, Texture::TextureFlags::ShaderRead);
-                if (m_image->pixel_format() != Texture::PixelFormat::RGBA)
-                    throw std::runtime_error("Pixel format not supported by the hardware!");
-                m_image->upload((const uint8_t *)m_image_pixels.get());
-                m_shader->set_texture("primary_texture", m_image);
-            }
-#else
             auto handle_upload_file =
                 [](const string &filename, const string &mime_type, string_view buffer, void *my_data = nullptr)
             {
                 auto that{reinterpret_cast<SampleViewer *>(my_data)};
                 HelloImGui::Log(HelloImGui::LogLevel::Debug, "Loading file '%s' of mime type '%s' ...",
                                 filename.c_str(), mime_type.c_str());
-                delete that->m_image;
-                // that->m_image = new Texture(filename, buffer, Texture::InterpolationMode::Trilinear,
-                //                             Texture::InterpolationMode::Nearest, Texture::WrapMode::ClampToEdge);
+
                 int2 image_size;
                 that->m_image_pixels =
                     PixelData{(float4 *)stbi_loadf_from_memory((const stbi_uc *)buffer.begin(), buffer.length(),
                                                                &image_size.x, &image_size.y, nullptr, 4),
                               stbi_image_free};
+
+                // remove any instances of filename from the recent files list
+                m_recent_files.erase(std::remove(m_recent_files.begin(), m_recent_files.end(), filename),
+                                     m_recent_files.end());
                 if (!that->m_image_pixels)
                     throw std::runtime_error("Could not load texture data from file \"" + filename +
                                              "\". Reason: " + stbi_failure_reason());
-                that->m_image = new Texture(Texture::PixelFormat::RGBA, Texture::ComponentFormat::Float32, image_size,
-                                            Texture::InterpolationMode::Trilinear, Texture::InterpolationMode::Nearest,
-                                            Texture::WrapMode::ClampToEdge, 1, Texture::TextureFlags::ShaderRead);
-                if (that->m_image->pixel_format() != Texture::PixelFormat::RGBA)
-                    throw std::runtime_error("Pixel format not supported by the hardware!");
-                that->m_image->upload((const uint8_t *)that->m_image_pixels.get());
-                that->m_shader->set_texture("primary_texture", that->m_image);
+                that->m_recent_files.push_back(filename);
+                that->m_filename = filename;
+                load_texture(that->m_image_pixels, image_size, that->m_image, that->m_shader);
             };
             // open the browser's file selector, and pass the file to the upload handler
             emscripten_browser_file::upload(".png,.hdr,.jpg,.jpeg,.bmp", handle_upload_file, this);
             HelloImGui::Log(HelloImGui::LogLevel::Debug, "Requesting file from user");
-#endif
             if (m_image)
                 fmt::print("Loaded image of size: {},{}\n", m_image->size().x, m_image->size().y);
         }
+#else
+        auto load_file = [this](const string filename)
+        {
+            HelloImGui::Log(HelloImGui::LogLevel::Debug, "Loading file '%s'...", filename.c_str());
+
+            int2 image_size;
+            m_image_pixels = PixelData{(float4 *)stbi_loadf(filename.c_str(), &image_size.x, &image_size.y, nullptr, 4),
+                                       stbi_image_free};
+
+            // remove any instances of filename from the recent files list
+            m_recent_files.erase(std::remove(m_recent_files.begin(), m_recent_files.end(), filename),
+                                 m_recent_files.end());
+            if (!m_image_pixels)
+                throw std::runtime_error("Could not load texture data from file \"" + filename +
+                                         "\". Reason: " + stbi_failure_reason());
+            m_recent_files.push_back(filename);
+            m_filename = filename;
+
+            // remember at most 15 most recent items
+            if (m_recent_files.size() > g_max_recent)
+                m_recent_files.erase(m_recent_files.begin(), m_recent_files.end() - g_max_recent);
+
+            load_texture(m_image_pixels, image_size, m_image, m_shader);
+        };
+
+        if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN " Open image..."))
+        {
+            auto result = pfd::open_file("Open image", "", {"Image files", "*.png *.hdr *.jpeg *.jpg *.bmp "}).result();
+            if (!result.empty())
+                load_file(result.front());
+
+            if (m_image)
+                fmt::print("Loaded image of size: {},{}\n", m_image->size().x, m_image->size().y);
+        }
+        ImGui::BeginDisabled(m_recent_files.empty());
+        if (ImGui::BeginMenu(ICON_FA_FOLDER_OPEN " Open Recent"))
+        {
+            size_t i = m_recent_files.size() - 1;
+            for (auto f = m_recent_files.rbegin(); f != m_recent_files.rend(); ++f, --i)
+            {
+                string short_name = (f->size() < 100) ? *f : f->substr(0, 47) + "..." + f->substr(f->length() - 50);
+                if (ImGui::MenuItem(fmt::format("{}##File{}", short_name, i).c_str()))
+                    load_file(*f);
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Clear recently opened"))
+                m_recent_files.clear();
+            ImGui::EndMenu();
+        }
+        ImGui::EndDisabled();
+#endif
     };
 
     m_params.callbacks.CustomBackground = [this]() { draw_background(); };
@@ -307,6 +359,68 @@ void SampleViewer::run()
 
 SampleViewer::~SampleViewer()
 {
+}
+
+void SampleViewer::draw_file_window()
+{
+    ImGui::BeginDisabled(!m_image || !m_image_pixels);
+    if (ImGui::BeginCombo("Mode", blend_mode_names()[m_blend_mode].c_str(), ImGuiComboFlags_HeightLargest))
+    {
+        for (int n = 0; n < NUM_BLEND_MODES; ++n)
+        {
+            const bool is_selected = (m_blend_mode == n);
+            if (ImGui::Selectable(blend_mode_names()[n].c_str(), is_selected))
+            {
+                m_blend_mode = (EBlendMode)n;
+                HelloImGui::Log(HelloImGui::LogLevel::Debug, "Switching to blend mode %d.", n);
+            }
+
+            // Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
+            if (is_selected)
+                ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+
+    if (ImGui::BeginCombo("Channel", channel_names()[m_channel].c_str(), ImGuiComboFlags_HeightLargest))
+    {
+        for (int n = 0; n < NUM_CHANNELS; ++n)
+        {
+            const bool is_selected = (m_blend_mode == n);
+            if (ImGui::Selectable(channel_names()[n].c_str(), is_selected))
+            {
+                m_channel = (EChannel)n;
+                HelloImGui::Log(HelloImGui::LogLevel::Debug, "Switching to channel %d.", n);
+            }
+
+            // Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
+            if (is_selected)
+                ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::EndDisabled();
+
+    // static int     index     = 0;
+    // vector<string> filenames = {m_filename + "##", "another file"};
+    // // Custom size: use all width, 5 items tall
+    // if (ImGui::BeginListBox("##file list", float2(-FLT_MIN, 0)))
+    // {
+    //     for (int n = 0; n < 2; ++n)
+    //     {
+    //         const bool is_selected = (index == n);
+    //         if (ImGui::Selectable(filenames[n].c_str(), is_selected))
+    //         {
+    //             index = n;
+    //             HelloImGui::Log(HelloImGui::LogLevel::Debug, "Switching to file %d.", n);
+    //         }
+
+    //         // Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
+    //         if (is_selected)
+    //             ImGui::SetItemDefaultFocus();
+    //     }
+    //     ImGui::EndListBox();
+    // }
 }
 
 void SampleViewer::center()
@@ -437,15 +551,11 @@ void SampleViewer::draw_text(float2 pos, const string &text, const float4 &color
     ImGui::PushFont(font);
     float2 size = ImGui::CalcTextSize(text.c_str());
 
-    // if (align & TextAlign_LEFT)
-    //     pos.x = pos.x;
     if (align & TextAlign_CENTER)
         pos.x -= 0.5f * size.x;
     else if (align & TextAlign_RIGHT)
         pos.x -= size.x;
 
-    // if (align & TextAlign_TOP)
-    //     pos.y = pos.y;
     if (align & TextAlign_MIDDLE)
         pos.y -= 0.5f * size.y;
     else if (align & TextAlign_BOTTOM)
@@ -460,8 +570,7 @@ void SampleViewer::draw_pixel_grid() const
     if (!m_image)
         return;
 
-    static const bool m_draw_grid      = true;
-    static const int  m_grid_threshold = 10;
+    static const int m_grid_threshold = 10;
 
     if (!m_draw_grid || (m_grid_threshold == -1) || (m_zoom <= m_grid_threshold))
         return;
@@ -493,14 +602,12 @@ void SampleViewer::draw_pixel_grid() const
 
 void SampleViewer::draw_pixel_info() const
 {
-    if (!m_image)
+    if (!m_image || !m_draw_pixel_info)
         return;
 
     constexpr int align     = TextAlign_CENTER | TextAlign_MIDDLE;
     constexpr int font_size = 30;
     auto          font      = m_mono_bold.at(font_size);
-
-    static const bool m_draw_pixel_info = true;
 
     ImGui::PushFont(font);
     static float        line_height     = ImGui::CalcTextSize("").y;
@@ -510,7 +617,7 @@ void SampleViewer::draw_pixel_info() const
     static const float  XY_threshold    = maxelem(XY_threshold2);
     ImGui::PopFont();
 
-    if (!m_draw_pixel_info || m_zoom <= RGBA_threshold)
+    if (m_zoom <= RGBA_threshold)
         return;
 
     // fade value for the R,G,B,A values shown at sufficient zoom
@@ -587,9 +694,9 @@ void SampleViewer::draw_contents() const
         m_shader->set_uniform("primary_pos", image_position());
         m_shader->set_uniform("primary_scale", image_scale());
 
-        m_shader->set_uniform("blend_mode", 0); //(int)m_blend_mode);
-        m_shader->set_uniform("channel", 0);    //(int)m_channel);
-        m_shader->set_uniform("bg_mode", 2);    //(int)m_bg_mode);
+        m_shader->set_uniform("blend_mode", (int)m_blend_mode);
+        m_shader->set_uniform("channel", (int)m_channel);
+        m_shader->set_uniform("bg_mode", (int)m_bg_mode);
         m_shader->set_uniform("bg_color", m_bg_color);
 
         // if (m_reference_image)
@@ -612,11 +719,65 @@ void SampleViewer::draw_contents() const
         m_shader->end();
     }
 }
+void SampleViewer::draw_gui()
+{
+    ImGuiViewport *viewport = ImGui::GetMainViewport();
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings;
+
+    // ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, HelloImGui::EmSize(2.5)));
+    // ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, HelloImGui::EmSize(2.5)));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.00f, 8.00f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5.00f, 3.00f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.00f, 6.00f));
+
+    if (ImGui::BeginViewportSideBar("##Toolbar", viewport, ImGuiDir_Up, HelloImGui::EmSize(2.5f) + 1, flags))
+    {
+        ImGui::AlignTextToFramePadding();
+        ImGui::Text("EV:");
+        ImGui::SameLine();
+        ImGui::PushItemWidth(HelloImGui::EmSize(8));
+
+        ImGui::SliderFloat("##ExposureSlider", &m_exposure, -9.f, 9.f, "%5.2f");
+        ImGui::SameLine();
+
+        ImGui::Button(ICON_FA_MAGIC "##NormalizeExposure");
+        ImGui::SameLine();
+
+        if (ImGui::Button(ICON_FA_UNDO "##ResetTonemapping"))
+        {
+            m_exposure = 0.f;
+            m_gamma    = 2.2f;
+            m_sRGB     = true;
+        }
+        ImGui::SameLine();
+
+        ImGui::Checkbox("sRGB", &m_sRGB);
+        ImGui::SameLine();
+
+        ImGui::BeginDisabled(m_sRGB);
+        ImGui::AlignTextToFramePadding();
+        ImGui::Text("Gamma:");
+        ImGui::SameLine();
+        ImGui::PushItemWidth(HelloImGui::EmSize(8));
+        ImGui::SliderFloat("##GammaSlider", &m_gamma, 0.02f, 9.f, "%5.3f");
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+
+        ImGui::Checkbox("Grid", &m_draw_grid);
+        ImGui::SameLine();
+
+        ImGui::Checkbox("RGB values", &m_draw_pixel_info);
+        ImGui::SameLine();
+
+        ImGui::End();
+    }
+    ImGui::PopStyleVar(3);
+}
 
 void SampleViewer::draw_background()
 {
     auto &io = ImGui::GetIO();
-
     process_hotkeys();
 
     try

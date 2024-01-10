@@ -6,6 +6,7 @@
 
 #include "common.h"
 #include <algorithm>
+#include <fstream>
 #include <iomanip>
 #include <sstream>
 
@@ -23,7 +24,7 @@ string to_upper(string str)
     return str;
 }
 
-std::string add_line_numbers(string_view input)
+string add_line_numbers(string_view input)
 {
     stringstream  result;
     istringstream input_stream(input.data());
@@ -42,4 +43,40 @@ std::string add_line_numbers(string_view input)
     }
 
     return result.str();
+}
+
+const vector<string> &channel_names()
+{
+    static const vector<string> names{"RGB",
+                                      "Red",
+                                      "Green",
+                                      "Blue",
+                                      "Alpha",
+                                      "Luminance",
+                                      "Gray",
+                                      "CIE L*",
+                                      "CIE a*",
+                                      "CIE b*",
+                                      "CIE chromaticity",
+                                      "False color",
+                                      "Negative-positive"};
+    return names;
+}
+
+const vector<string> &blend_mode_names()
+{
+    static const vector<string> names{
+        "Normal", "Multiply", "Divide", "Add", "Average", "Subtract", "Difference", "Relative difference",
+    };
+    return names;
+}
+
+string channel_to_string(EChannel channel)
+{
+    return channel_names()[channel];
+}
+
+string blend_mode_to_string(EBlendMode mode)
+{
+    return blend_mode_names()[mode];
 }

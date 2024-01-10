@@ -13,6 +13,7 @@
 #endif
 
 #include <string>
+#include <vector>
 
 /// Linearly interpolates between `a` and `b`, using parameter `t`.
 /**
@@ -49,12 +50,64 @@ std::string to_lower(std::string str);
 std::string to_upper(std::string str);
 std::string add_line_numbers(std::string_view in);
 
-int         version_major();
-int         version_minor();
-int         version_patch();
-int         version_combined();
-std::string version();
-std::string git_hash();
-std::string git_describe();
-std::string build_timestamp();
-std::string backend();
+enum EColorSpace : int
+{
+    LinearSRGB_CS = 0,
+    LinearSGray_CS,
+    LinearAdobeRGB_CS,
+    CIEXYZ_CS,
+    CIELab_CS,
+    CIELuv_CS,
+    CIExyY_CS,
+    HLS_CS,
+    HSV_CS
+};
+
+enum EChannel : int
+{
+    RGB = 0,
+    RED,
+    GREEN,
+    BLUE,
+    ALPHA,
+    LUMINANCE,
+    GRAY,
+    CIE_L,
+    CIE_a,
+    CIE_b,
+    CIE_CHROMATICITY,
+    FALSE_COLOR,
+    POSITIVE_NEGATIVE,
+
+    NUM_CHANNELS
+};
+
+enum EBlendMode : int
+{
+    NORMAL_BLEND = 0,
+    MULTIPLY_BLEND,
+    DIVIDE_BLEND,
+    ADD_BLEND,
+    AVERAGE_BLEND,
+    SUBTRACT_BLEND,
+    DIFFERENCE_BLEND,
+    RELATIVE_DIFFERENCE_BLEND,
+
+    NUM_BLEND_MODES
+};
+
+enum EBGMode : int
+{
+    BG_BLACK = 0,
+    BG_WHITE,
+    BG_DARK_CHECKER,
+    BG_LIGHT_CHECKER,
+    BG_CUSTOM_COLOR,
+
+    NUM_BG_MODES
+};
+
+const std::vector<std::string> &channel_names();
+const std::vector<std::string> &blend_mode_names();
+std::string                     channel_to_string(EChannel channel);
+std::string                     blend_mode_to_string(EBlendMode mode);

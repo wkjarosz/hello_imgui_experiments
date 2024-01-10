@@ -1,6 +1,9 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
+#include "colorspaces.metal"
+#include "colormaps.metal"
+
 using namespace metal;
 
 #define CHANNEL_RGB 0

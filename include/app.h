@@ -42,11 +42,13 @@ using namespace linalg::aliases;
 #include "texture.h"
 #include <map>
 #include <string>
+#include <string_view>
 #include <vector>
 
 using std::map;
 using std::ofstream;
 using std::string;
+using std::string_view;
 using std::vector;
 
 enum TextAlign : int
@@ -60,6 +62,8 @@ enum TextAlign : int
     TextAlign_MIDDLE = 1 << 4, // Align text vertically to middle.
     TextAlign_BOTTOM = 1 << 5, // Align text vertically to bottom.
 };
+
+using PixelData = std::unique_ptr<float4[], void (*)(void *)>;
 
 class SampleViewer
 {
@@ -113,34 +117,37 @@ private:
     void   draw_pixel_info() const;
     void   draw_pixel_grid() const;
     void   draw_contents() const;
+    void   draw_gui();
     void   draw_image_border() const;
+    void   draw_file_window();
     void   process_hotkeys();
     float4 image_pixel(int2 p) const
     {
         return (m_image_pixels && m_image) ? m_image_pixels.get()[p.x + p.y * m_image->size().x] : float4{0.f};
     }
 
-    RenderPass *m_render_pass = nullptr;
-    Shader     *m_shader      = nullptr;
-    Texture    *m_image = nullptr, *m_null_image = nullptr, *m_dither_tex = nullptr;
-    using PixelData = std::unique_ptr<float4[], void (*)(void *)>;
-    PixelData m_image_pixels;
+    RenderPass              *m_render_pass = nullptr;
+    Shader                  *m_shader      = nullptr;
+    std::unique_ptr<Texture> m_image = nullptr, m_null_image = nullptr, m_dither_tex = nullptr;
+    PixelData                m_image_pixels;
+    string                   m_filename;
 
     float m_exposure = 0.f, m_gamma = 2.2f;
-    bool  m_sRGB = false, m_clamp_to_LDR = false, m_dither = true;
-    //, m_draw_grid = true, m_draw_pixel_info = true;
+    bool  m_sRGB = false, m_clamp_to_LDR = false, m_dither = true, m_draw_grid = true, m_draw_pixel_info = true;
 
     // Image display parameters.
-    float  m_zoom_sensitivity = 1.0717734625f;
-    float  m_zoom             = 1.f;        ///< The scale/zoom of the image
-    float2 m_offset           = {0.f, 0.f}; ///< The panning offset of the
-    // EChannel       m_channel    = EChannel::RGB;             ///< Which channel to display
-    // EBlendMode     m_blend_mode = EBlendMode::NORMAL_BLEND;  ///< How to blend the current and reference images
-    // EBGMode        m_bg_mode    = EBGMode::BG_LIGHT_CHECKER; ///< How the background around the image should be
+    float      m_zoom_sensitivity = 1.0717734625f;
+    float      m_zoom             = 1.f;                      ///< The scale/zoom of the image
+    float2     m_offset           = {0.f, 0.f};               ///< The panning offset of the
+    EChannel   m_channel          = EChannel::RGB;            ///< Which channel to display
+    EBlendMode m_blend_mode       = EBlendMode::NORMAL_BLEND; ///< How to blend the current and reference images
+    EBGMode    m_bg_mode          = EBGMode::BG_DARK_CHECKER; ///< How the background around the image should be
     // rendered
     float4 m_bg_color{0.3, 0.3, 0.3, 1.0}; ///< The background color if m_bg_mode == BG_CUSTOM_COLOR
 
     HelloImGui::RunnerParams m_params;
+
+    vector<string> m_recent_files;
 
     // sans and mono fonts in both regular and bold weights at various sizes
     map<int, ImFont *> m_sans_regular, m_sans_bold, m_mono_regular, m_mono_bold;

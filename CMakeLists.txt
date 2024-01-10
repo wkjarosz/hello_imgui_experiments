@@ -161,30 +161,38 @@ if(portable-file-dialogs_ADDED)
 endif()
 
 if(NOT EMSCRIPTEN)
-  set(HELLOIMGUI_USE_GLFW_METAL ON)
+  # set(HELLOIMGUI_USE_GLFW_METAL ON)
 
-  # set(HELLOIMGUI_USE_GLFW_OPENGL3 ON)
+  set(HELLOIMGUI_USE_GLFW_OPENGL3 ON)
 
   # set(HELLOIMGUI_USE_SDL_OPENGL3 ON)
 
   # set(HELLOIMGUI_USE_SDL_METAL ON)
 endif()
 
+# copy asset directory to the build tree file
+file(
+  GLOB_RECURSE MY_RESOURCE_FILES
+  RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+  # CONFIGURE_DEPENDS
+  ${CMAKE_CURRENT_SOURCE_DIR}/assets/**.*
+)
+
 if(APPLE AND (HELLOIMGUI_USE_GLFW_METAL OR HELLOIMGUI_USE_SDL_METAL))
 
   # ~~~
-  # Precompile .metal shaders to .metallib files
-  #
+  # # Precompile .metal shaders to .metallib files
+  # # exclude metal files from the copy (we will compile them to metallib files below)
+  # list(FILTER MY_RESOURCE_FILES EXCLUDE REGEX ".*\\.metal$")
   # # Glob up metal shaders
   # file(
   #   GLOB_RECURSE metal_shaders
   #   RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
   #   ${CMAKE_CURRENT_SOURCE_DIR}/assets/**.metal
   # )
-  #
   # foreach(shader ${metal_shaders})
   #   set(shader_source "${CMAKE_CURRENT_SOURCE_DIR}/${shader}")
-  #   set(shader_lib "${CMAKE_CURRENT_BINARY_DIR}/shaders_temp/${shader}lib")
+  #   set(shader_lib "${CMAKE_CURRENT_BINARY_DIR}/${shader}lib")
   #   # message(STATUS "Compiling Metal shader \"${shader_source}\" to MLTB library \"${shader_lib}\".")
   #   add_custom_command(
   #     OUTPUT ${shader_lib}
@@ -194,6 +202,11 @@ if(APPLE AND (HELLOIMGUI_USE_GLFW_METAL OR HELLOIMGUI_USE_SDL_METAL))
   #     COMMENT "Compiling Metal shader \"${shader}\" to MLTB library \"${shader}lib\"."
   #     VERBATIM
   #   )
+  #   set_property(
+  #     SOURCE src/app.cpp
+  #     APPEND
+  #     PROPERTY OBJECT_DEPENDS ${shader_lib}
+  #   )
   #   list(APPEND EXTRA_SOURCES ${shader_lib})
   # endforeach()
   # ~~~
@@ -201,7 +214,13 @@ if(APPLE AND (HELLOIMGUI_USE_GLFW_METAL OR HELLOIMGUI_USE_SDL_METAL))
   list(APPEND EXTRA_SOURCES src/renderpass_metal.mm src/shader_metal.mm src/texture_metal.mm)
 endif()
 
-CPMAddPackage("gh:wkjarosz/hello_imgui#d9f414c69d560148a5cdbd1f24786d23383a72d3")
+foreach(MY_RESOURCE_FILE ${MY_RESOURCE_FILES})
+  configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/${MY_RESOURCE_FILE} ${CMAKE_CURRENT_BINARY_DIR}/${MY_RESOURCE_FILE} COPYONLY
+  )
+endforeach()
+
+CPMAddPackage("gh:pthom/hello_imgui#47b06b22ab06d3a62fd966e8446a16a2c75691cd")
 if(hello_imgui_ADDED)
   message(STATUS "hello_imgui library added")
 endif()
@@ -253,7 +272,7 @@ hello_imgui_add_app(
   src/texture_gl.cpp
   ${EXTRA_SOURCES}
   ASSETS_LOCATION
-  ${CMAKE_CURRENT_SOURCE_DIR}/assets
+  ${CMAKE_CURRENT_BINARY_DIR}/assets
 )
 
 set_target_properties(HelloGuiExperiments PROPERTIES OUTPUT_NAME ${output_name} CXX_STANDARD 17)

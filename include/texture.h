@@ -70,7 +70,7 @@ public:
     };
 
     /// How will the texture be used? (Must specify at least one)
-    enum TextureFlags
+    enum TextureFlags : uint8_t
     {
         ShaderRead   = 0x01, ///< Texture to be read in shaders
         RenderTarget = 0x02  ///< Target framebuffer for rendering
@@ -85,11 +85,11 @@ public:
             pixel_format() and \ref component_format(). Some caution must be exercised in this case, since \ref upload()
             will need to provide the data in a different storage format.
     */
-    Texture(PixelFormat pixel_format, ComponentFormat component_format, const int2 &size,
+    Texture(PixelFormat pixel_format, ComponentFormat component_format, int2 size,
             InterpolationMode min_interpolation_mode = InterpolationMode::Bilinear,
             InterpolationMode mag_interpolation_mode = InterpolationMode::Bilinear,
-            WrapMode wrap_mode = WrapMode::ClampToEdge, uint8_t samples = 1,
-            uint8_t flags = (uint8_t)TextureFlags::ShaderRead, bool manual_mipmapping = false);
+            WrapMode wrap_mode = WrapMode::ClampToEdge, uint8_t samples = 1, uint8_t flags = TextureFlags::ShaderRead,
+            bool manual_mipmapping = false);
 
     /// Load an image from the given file using stb-image
     Texture(const std::string &filename, InterpolationMode min_interpolation_mode = InterpolationMode::Bilinear,
