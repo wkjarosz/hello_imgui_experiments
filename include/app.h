@@ -117,7 +117,7 @@ private:
     void   draw_pixel_info() const;
     void   draw_pixel_grid() const;
     void   draw_contents() const;
-    void   draw_gui();
+    void   draw_top_toolbar();
     void   draw_image_border() const;
     void   draw_file_window();
     void   process_hotkeys();

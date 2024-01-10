@@ -68,7 +68,7 @@ static void load_texture(const PixelData &pixels, int2 image_size, unique_ptr<Te
 SampleViewer::SampleViewer() : m_image_pixels(nullptr, stbi_image_free)
 {
     stbi_ldr_to_hdr_scale(1.0f);
-    stbi_ldr_to_hdr_gamma(1.0f);
+    stbi_ldr_to_hdr_gamma(2.2f);
 
     // set up HelloImGui parameters
     m_params.appWindowParams.windowGeometry.size     = {1200, 800};
