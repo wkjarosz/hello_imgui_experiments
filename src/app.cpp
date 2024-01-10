@@ -289,13 +289,19 @@ SampleViewer::SampleViewer() : m_image_pixels(nullptr, stbi_image_free)
                               stbi_image_free};
 
                 // remove any instances of filename from the recent files list
-                m_recent_files.erase(std::remove(m_recent_files.begin(), m_recent_files.end(), filename),
-                                     m_recent_files.end());
+                that->m_recent_files.erase(
+                    std::remove(that->m_recent_files.begin(), that->m_recent_files.end(), filename),
+                    that->m_recent_files.end());
                 if (!that->m_image_pixels)
                     throw std::runtime_error("Could not load texture data from file \"" + filename +
                                              "\". Reason: " + stbi_failure_reason());
                 that->m_recent_files.push_back(filename);
                 that->m_filename = filename;
+
+                // remember at most 15 most recent items
+                if (that->m_recent_files.size() > g_max_recent)
+                    that->m_recent_files.erase(that->m_recent_files.begin(), that->m_recent_files.end() - g_max_recent);
+
                 load_texture(that->m_image_pixels, image_size, that->m_image, that->m_shader);
             };
             // open the browser's file selector, and pass the file to the upload handler
